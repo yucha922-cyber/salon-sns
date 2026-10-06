@@ -116,6 +116,8 @@ export const updatePostSchema = z.object({
   id: z.string().min(1),
   title: text(200).min(1),
   caption: text(2200),
+  cta: text(200).optional(),
+  hashtags: z.array(z.string().trim().max(60)).max(30).optional(),
   status: z.enum(POST_STATUSES),
   scheduledAt: z.string().datetime({ offset: true }).nullable(),
 });
@@ -139,14 +141,22 @@ export const signUpSchema = authCredentialsSchema.extend({
 // ---------------------------------------------------------------------------
 const idSchema = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/, "IDが不正です");
 
+const timeSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "時刻はHH:MM形式で入力してください");
+
 export const accountStrategySchema = z.object({
+  targetAudience: text(500),
   persona: text(500),
-  kpis: list(10, 80),
-  contentPillars: list(10, 60),
+  kpiTargets: z
+    .array(z.object({ metric: text(80).min(1, "KPI名を入力してください"), target: z.number().min(0).max(1_000_000_000).nullable(), unit: text(20) }))
+    .max(10),
+  contentPillars: list(12, 60),
   postsPerWeek: z.number().int().min(0).max(50),
   postingFrequencyNote: text(200),
-  cta: text(200),
+  preferredPostingDays: z.array(z.number().int().min(0).max(6)).max(7).transform((d) => [...new Set(d)].sort()),
+  preferredPostingTimes: z.array(timeSchema).max(6).transform((t) => [...new Set(t)].sort()),
+  cta: text(300),
   tone: text(300),
+  notes: text(1000),
 });
 
 export const snsAccountInputSchema = z.object({
@@ -155,7 +165,15 @@ export const snsAccountInputSchema = z.object({
   displayName: text(80),
   locationId: idSchema.nullable(),
   goal: z.enum(ACCOUNT_GOALS),
+  customGoal: text(60),
+  active: z.boolean(),
   strategy: accountStrategySchema,
+});
+
+export const contentPillarInputSchema = z.object({
+  goal: z.enum(ACCOUNT_GOALS),
+  label: text(60).min(1, "柱の名前を入力してください"),
+  description: text(200),
 });
 
 export const locationProfileInputSchema = z.object({
@@ -173,14 +191,42 @@ export const hqCampaignInputSchema = z
   .object({
     name: text(120).min(1, "キャンペーン名を入力してください"),
     status: z.enum(HQ_CAMPAIGN_STATUSES),
+    goal: z.enum(ACCOUNT_GOALS),
     startsOn: dateSchema,
     endsOn: dateSchema,
     sharedTheme: text(500).min(1, "共通テーマを入力してください"),
+    contentDirections: list(10, 200),
+    requiredMessages: list(10, 200),
+    optionalMessages: list(10, 200),
+    cta: text(200),
     creative: z.object({ headline: text(120), body: text(1000), visual: text(300) }),
     localizationRules: list(15, 200),
     targetLocationIds: z.array(idSchema).max(200),
+    targetPlatforms: z.array(z.enum(SOCIAL_PLATFORMS)).max(4),
   })
   .refine((v) => !v.startsOn || !v.endsOn || v.endsOn >= v.startsOn, {
     message: "終了日は開始日以降にしてください",
     path: ["endsOn"],
   });
+
+export const planItemInputSchema = z.object({
+  scheduledDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "日付の形式が正しくありません"),
+  scheduledTime: timeSchema,
+  platform: z.enum(SOCIAL_PLATFORMS),
+  contentType: z.enum(CONTENT_TYPES),
+  theme: text(200).min(1, "テーマを入力してください"),
+  hook: text(300),
+  summary: text(1000),
+  goal: z.enum(ACCOUNT_GOALS),
+  target: text(300),
+  contentPillar: text(60),
+  funnelStage: text(30),
+  cta: text(300),
+});
+
+export const generateMonthlyPlanSchema = z.object({
+  accountId: idSchema,
+  month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "対象月が正しくありません"),
+  hqCampaignId: idSchema.nullable(),
+  notes: text(500),
+});

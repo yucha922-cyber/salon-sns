@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import type { HqCampaign, HqCampaignInput, Post } from "@/lib/domain/types";
-import { HQ_CAMPAIGN_STATUSES } from "@/lib/domain/types";
-import { HQ_STATUS_LABELS, POST_STATUS_LABELS, POST_STATUS_PILL } from "@/lib/domain/labels";
+import { ACCOUNT_GOALS, HQ_CAMPAIGN_STATUSES, SOCIAL_PLATFORMS } from "@/lib/domain/types";
+import { ACCOUNT_GOAL_LABELS, HQ_STATUS_LABELS, PLATFORM_LABELS, POST_STATUS_LABELS, POST_STATUS_PILL } from "@/lib/domain/labels";
 import { deleteHqCampaignAction, localizeHqCampaignAction, saveHqCampaignAction } from "@/app/actions/strategy";
 import type { LocalizationResult } from "@/lib/services/localization";
 import { Field, TagInput } from "@/components/ui/form";
@@ -25,9 +25,15 @@ const RULE_SUGGESTIONS = [
 const EMPTY: HqCampaignInput = {
   name: "",
   status: "draft",
+  goal: "acquisition",
   startsOn: null,
   endsOn: null,
   sharedTheme: "",
+  contentDirections: [],
+  requiredMessages: [],
+  optionalMessages: [],
+  cta: "",
+  targetPlatforms: [],
   creative: { headline: "", body: "", visual: "" },
   localizationRules: RULE_SUGGESTIONS.slice(0, 4),
   targetLocationIds: [],
@@ -157,7 +163,7 @@ function CampaignEditor({
       <div className="brand-title-row">
         <div>
           <h2>{campaign ? campaign.name : "新しい本部キャンペーン"}</h2>
-          <p>HQ campaign · shared content theme · shared creative · localization rules</p>
+          <p>本部が全店舗へ配布するキャンペーン / コンテンツテーマ</p>
         </div>
         {!readOnly && (
           <div className="heading-actions">
@@ -189,9 +195,28 @@ function CampaignEditor({
         </div>
         <div className="brand-section">
           <h3>Shared Content Theme</h3>
-          <Field label="共通テーマ" htmlFor="hqTheme" error={errors.sharedTheme} hint="全店舗で共通して伝えるメッセージ">
+          <Field label="目的（Goal）" htmlFor="hqGoal">
+            <select id="hqGoal" className="select" value={value.goal} onChange={(e) => set({ goal: e.target.value as HqCampaignInput["goal"] })}>
+              {ACCOUNT_GOALS.map((g) => <option key={g} value={g}>{ACCOUNT_GOAL_LABELS[g]}</option>)}
+            </select>
+          </Field>
+          <Field label="共通テーマ（説明）" htmlFor="hqTheme" error={errors.sharedTheme} hint="全店舗で共通して伝えるメッセージ">
             <textarea id="hqTheme" className={`textarea ${errors.sharedTheme ? "invalid" : ""}`} value={value.sharedTheme} onChange={(e) => set({ sharedTheme: e.target.value })}
-              placeholder="例：季節の変わり目の不調を、姿勢から整える。初回姿勢チェック無料" />
+              placeholder="例：デスクワークで崩れた姿勢を整える。今月は全店舗で肩こり訴求" />
+          </Field>
+          <Field label="コンテンツの方向性" htmlFor="hqDirections" optional hint="AIが各店舗の企画に取り入れる切り口">
+            <TagInput id="hqDirections" value={value.contentDirections} onChange={(contentDirections) => set({ contentDirections })} max={10} placeholder="例：デスクワーク中のNG姿勢" />
+          </Field>
+          <div className="two-fields">
+            <Field label="必須メッセージ" htmlFor="hqRequired" optional hint="全店舗の投稿に必ず入れる">
+              <TagInput id="hqRequired" value={value.requiredMessages} onChange={(requiredMessages) => set({ requiredMessages })} max={10} placeholder="例：初回姿勢チェック無料" />
+            </Field>
+            <Field label="任意メッセージ" htmlFor="hqOptional" optional hint="店舗の判断で使ってよい">
+              <TagInput id="hqOptional" value={value.optionalMessages} onChange={(optionalMessages) => set({ optionalMessages })} max={10} placeholder="例：仕事帰りに通える" />
+            </Field>
+          </div>
+          <Field label="CTA" htmlFor="hqCta" optional>
+            <input id="hqCta" className="input" value={value.cta} onChange={(e) => set({ cta: e.target.value })} placeholder="例：LINEから初回予約" />
           </Field>
         </div>
         <div className="brand-section">
@@ -210,6 +235,21 @@ function CampaignEditor({
           <h3>Localization Rules</h3>
           <Field label="ローカライズのルール" htmlFor="hqRules" hint="AIが各店舗向けに書き換えるときに必ず守るルール">
             <TagInput id="hqRules" value={value.localizationRules} onChange={(localizationRules) => set({ localizationRules })} suggestions={RULE_SUGGESTIONS} max={15} placeholder="ルールを入力してEnter" />
+          </Field>
+          <Field label="対象SNS">
+            <div className="check-list">
+              <label className="check-item">
+                <input type="checkbox" checked={value.targetPlatforms.length === 0} onChange={() => set({ targetPlatforms: value.targetPlatforms.length ? [] : ["instagram"] })} />
+                すべて
+              </label>
+              {SOCIAL_PLATFORMS.map((p) => (
+                <label className="check-item" key={p}>
+                  <input type="checkbox" disabled={value.targetPlatforms.length === 0} checked={value.targetPlatforms.length === 0 || value.targetPlatforms.includes(p)}
+                    onChange={() => set({ targetPlatforms: value.targetPlatforms.includes(p) ? value.targetPlatforms.filter((x) => x !== p) : [...value.targetPlatforms, p] })} />
+                  {PLATFORM_LABELS[p]}
+                </label>
+              ))}
+            </div>
           </Field>
           <Field label="対象店舗">
             <div className="check-list">

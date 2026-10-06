@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import type { Post } from "@/lib/domain/types";
 import { PLATFORM_LABELS } from "@/lib/domain/labels";
 import { jstDateKey, jstTime, monthGrid } from "@/lib/domain/dates";
+import { isPlannedOnly } from "@/lib/domain/posts";
 import { PostEditModal } from "./post-edit-modal";
 
 export function PlannerCalendar({
@@ -55,7 +56,7 @@ export function PlannerCalendar({
                 style={p.id === highlightId ? { boxShadow: "0 0 0 2px #8db5a7" } : p.status === "draft" ? { opacity: 0.75 } : undefined}
                 onClick={() => setEditing(p)}
               >
-                <b>{jstTime(p.scheduledAt ?? p.createdAt)} · {PLATFORM_LABELS[p.platform]}{p.status === "draft" ? "（下書き）" : ""}</b>
+                <b>{jstTime(p.scheduledAt ?? p.createdAt)} · {PLATFORM_LABELS[p.platform]}{isPlannedOnly(p) ? <span className="plan-badge">企画</span> : p.status === "draft" ? "（下書き）" : ""}</b>
                 {p.title}
               </button>
             ))}

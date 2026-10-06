@@ -5,16 +5,16 @@ import { useState, useTransition } from "react";
 import type { ContentType, PostStatus, SocialPlatform } from "@/lib/domain/types";
 import { CONTENT_TYPE_LABELS, PLATFORM_LABELS } from "@/lib/domain/labels";
 import { generatePostAction } from "@/app/actions/ai";
-import { savePostAction } from "@/app/actions/posts";
+import { savePostAction, updatePostAction } from "@/app/actions/posts";
 import { ChoiceChips, Field } from "@/components/ui/form";
 import { Spinner } from "@/components/ui/states";
 import { useToast } from "@/components/ui/toast";
 
 const FORMATS: Record<SocialPlatform, ContentType[]> = {
-  instagram: ["feed", "carousel", "reel", "story"],
-  threads: ["text"],
-  tiktok: ["short_video"],
-  facebook: ["feed", "text"],
+  instagram: ["feed", "carousel", "reel", "story", "before_after", "staff", "educational", "testimonial", "offer"],
+  threads: ["threads_text", "text"],
+  tiktok: ["short_video", "staff", "educational"],
+  facebook: ["feed", "text", "educational", "testimonial", "offer"],
 };
 
 interface Draft {
@@ -46,6 +46,16 @@ export interface CreatorDefaults {
   campaigns: { id: string; name: string; theme: string }[];
   initialAccountId: string;
   initialCampaignId: string;
+  /** Approved plan item → caption step: saving updates this planner post. */
+  planned?: {
+    postId: string;
+    platform: SocialPlatform;
+    contentType: ContentType;
+    theme: string;
+    notes: string;
+    target: string;
+    scheduledAtLocal: string;
+  } | null;
 }
 
 function toLocalInput(date: Date): string {
@@ -61,18 +71,21 @@ export function PostCreator({ defaults }: { defaults: CreatorDefaults }) {
   const [accountId, setAccountId] = useState(initialAccount?.id ?? "");
   const [locationId, setLocationId] = useState(initialAccount?.locationId ?? "");
   const [campaignId, setCampaignId] = useState(initialCampaign?.id ?? "");
-  const [platform, setPlatform] = useState<SocialPlatform>(initialAccount?.platform ?? "instagram");
+  const planned = defaults.planned ?? null;
+  const [platform, setPlatform] = useState<SocialPlatform>(planned?.platform ?? initialAccount?.platform ?? "instagram");
   const [contentType, setContentType] = useState<ContentType>(
-    initialAccount && !FORMATS[initialAccount.platform].includes("carousel") ? (FORMATS[initialAccount.platform][0] ?? "feed") : "carousel",
+    planned?.contentType ??
+      (initialAccount && !FORMATS[initialAccount.platform].includes("carousel") ? (FORMATS[initialAccount.platform][0] ?? "feed") : "carousel"),
   );
-  const [theme, setTheme] = useState(initialCampaign?.theme ?? defaults.initialTheme);
-  const [target, setTarget] = useState(initialAccount?.persona || (defaults.targets[0] ?? ""));
+  const [theme, setTheme] = useState(planned?.theme ?? initialCampaign?.theme ?? defaults.initialTheme);
+  const [target, setTarget] = useState(planned?.target || initialAccount?.persona || (defaults.targets[0] ?? ""));
   const [goal, setGoal] = useState("保存・シェア");
   const [tone, setTone] = useState(initialAccount?.tone || (defaults.tones[0] ?? "やさしく専門的"));
-  const [notes, setNotes] = useState("");
+  const [notes, setNotes] = useState(planned?.notes ?? "");
   const [draft, setDraft] = useState<Draft | null>(null);
   const [provider, setProvider] = useState<string | null>(null);
   const [scheduledAt, setScheduledAt] = useState(() => {
+    if (planned?.scheduledAtLocal) return planned.scheduledAtLocal;
     if (defaults.initialDate) return `${defaults.initialDate}T20:00`;
     const d = new Date();
     d.setDate(d.getDate() + 1);
@@ -133,6 +146,26 @@ export function PostCreator({ defaults }: { defaults: CreatorDefaults }) {
   const save = () => {
     if (!draft) return;
     startSave(async () => {
+      if (planned) {
+        const updated = await updatePostAction({
+          id: planned.postId,
+          title: draft.title,
+          caption: draft.caption,
+          cta: draft.cta,
+          hashtags: draft.hashtags.split(/[\s,、]+/).filter(Boolean).map((h) => (h.startsWith("#") ? h : `#${h}`)),
+          status,
+          scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : null,
+        });
+        if (!updated.ok) {
+          setError(updated.error);
+          return toast(updated.error, "error");
+        }
+        toast(status === "scheduled" ? "キャプションを保存し、予約しました" : "キャプションを保存しました");
+        const at = updated.data.scheduledAt ? new Date(updated.data.scheduledAt) : new Date();
+        router.push(`/planner?month=${at.getFullYear()}-${String(at.getMonth() + 1).padStart(2, "0")}&highlight=${updated.data.id}`);
+        router.refresh();
+        return;
+      }
       const result = await savePostAction({
         platform,
         contentType,
@@ -296,7 +329,7 @@ export function PostCreator({ defaults }: { defaults: CreatorDefaults }) {
             <div className="field-hint">SNSへの自動投稿はまだ行いません。予約した投稿はカレンダーで管理できます。</div>
             <button className="button primary" style={{ width: "100%", justifyContent: "center", marginTop: 8 }} onClick={save}
               disabled={saving || !draft.title.trim() || (status === "scheduled" && !scheduledAt)}>
-              {saving ? <><Spinner /> 保存中…</> : "SNS Plannerへ追加 →"}
+              {saving ? <><Spinner /> 保存中…</> : planned ? "キャプションを保存 →" : "SNS Plannerへ追加 →"}
             </button>
           </div>
         )}

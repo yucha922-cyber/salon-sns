@@ -1,6 +1,6 @@
 import "server-only";
 import type { DataRepository } from "@/lib/data/repository";
-import type { Organization } from "@/lib/domain/types";
+import type { Organization, SnsAccount } from "@/lib/domain/types";
 import {
   buildDemoHqCampaign,
   buildDemoPosts,
@@ -8,6 +8,7 @@ import {
   DEMO_BRAND_BRAIN,
   DEMO_LOCATION_PROFILES,
   DEMO_ORGANIZATION_NAME,
+  DEMO_RECOMMENDATIONS,
 } from "@/lib/demo/seed";
 
 /**
@@ -25,7 +26,7 @@ export async function createDemoOrganization(repo: DataRepository): Promise<Orga
   }
   // Brand-default accounts (created from the Brand Brain handles) are reused, not duplicated.
   const defaults = await repo.listAccounts(organization.id);
-  const accounts = [];
+  const accounts: SnsAccount[] = [];
   for (const { locationIndex, ...account } of DEMO_ACCOUNTS) {
     const locationId = locationIndex === null ? null : (locationIds[locationIndex] ?? null);
     const existing = defaults.find((a) => a.isBrandDefault && a.platform === account.platform && a.handle === account.handle);
@@ -36,8 +37,16 @@ export async function createDemoOrganization(repo: DataRepository): Promise<Orga
     targetLocationIds: locationIds.filter((id): id is string => Boolean(id)),
   });
 
-  // Demo posts belong to the Shibuya account.
-  const shibuyaAccount = accounts.find((a) => a.locationId === locationIds[0] && a.goal === "acquisition");
+  await repo.createRecommendations(
+    organization.id,
+    DEMO_RECOMMENDATIONS.map(({ accountHandle, ...rec }) => {
+      const account = accountHandle ? accounts.find((a) => a.handle === accountHandle) : undefined;
+      return { ...rec, socialAccountId: account?.id ?? null, locationId: account?.locationId ?? null };
+    }),
+  );
+
+  // Demo posts belong to the Shibuya Instagram account.
+  const shibuyaAccount = accounts.find((a) => a.locationId === locationIds[0] && a.platform === "instagram");
   for (const post of buildDemoPosts()) {
     await repo.createPost(organization.id, { ...post, accountId: shibuyaAccount?.id ?? null, locationId: locationIds[0] ?? null });
   }

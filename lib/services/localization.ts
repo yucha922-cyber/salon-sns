@@ -9,20 +9,34 @@ const MAX_LOCATIONS_PER_RUN = 20;
 
 const DEFAULT_CONTENT: Record<SnsAccount["platform"], ContentType> = {
   instagram: "feed",
-  threads: "text",
+  threads: "threads_text",
   tiktok: "short_video",
   facebook: "feed",
 };
 
 /** The account a location's localized post should go to (acquisition first). */
 export function pickAccountForLocation(accounts: SnsAccount[], locationId: string): SnsAccount | null {
-  const local = accounts.filter((a) => a.locationId === locationId);
+  const local = accounts.filter((a) => a.active && a.locationId === locationId);
   return (
     local.find((a) => a.goal === "acquisition") ??
     local.find((a) => a.goal !== "recruitment") ??
-    accounts.find((a) => a.locationId === null && a.goal !== "recruitment") ??
+    accounts.find((a) => a.active && a.locationId === null && a.goal !== "recruitment") ??
     null
   );
+}
+
+/**
+ * Accounts that should receive the campaign at a location: active, on a target
+ * platform, and matching the campaign goal (recruitment campaigns only go to
+ * recruitment accounts and vice versa). Falls back to the best single account.
+ */
+export function accountsForCampaign(accounts: SnsAccount[], locationId: string, campaign: HqCampaign): SnsAccount[] {
+  const platformOk = (a: SnsAccount) => campaign.targetPlatforms.length === 0 || campaign.targetPlatforms.includes(a.platform);
+  const goalOk = (a: SnsAccount) => (campaign.goal === "recruitment" ? a.goal === "recruitment" : a.goal !== "recruitment");
+  const matches = accounts.filter((a) => a.active && a.locationId === locationId && platformOk(a) && goalOk(a));
+  if (matches.length) return matches;
+  const fallback = pickAccountForLocation(accounts.filter(platformOk), locationId);
+  return fallback && goalOk(fallback) ? [fallback] : [];
 }
 
 /** "YYYY-MM-DD" → that day 20:00 JST as ISO. */
@@ -59,43 +73,53 @@ export async function localizeCampaign(
   const result: LocalizationResult = { created: [], skipped: [] };
 
   for (const location of targets.slice(0, MAX_LOCATIONS_PER_RUN)) {
-    const account = pickAccountForLocation(accounts, location.locationId);
-    const platform = account?.platform ?? "instagram";
-    try {
-      const { object } = await provider.generateStructuredObject(
-        buildPostCreatorRequest(
-          brain,
-          {
-            platform,
-            contentType: DEFAULT_CONTENT[platform],
-            theme: campaign.sharedTheme,
-            target: location.demographics,
-            goal: account ? ACCOUNT_GOAL_LABELS[account.goal] : "集客",
-            tone: account?.strategy.tone ?? "",
-            notes: [campaign.creative.headline, campaign.creative.body].filter(Boolean).join(" / ").slice(0, 500),
-          },
-          { account, location, campaign },
-        ),
-      );
-      const post = await repo.createPost(organizationId, {
-        platform,
-        contentType: DEFAULT_CONTENT[platform],
-        title: object.title,
-        caption: object.caption,
-        cta: object.cta,
-        hashtags: object.hashtags,
-        status: "draft",
-        scheduledAt: campaignSlot(campaign.startsOn),
-        source: "hq_localization",
-        aiProvider: provider.name,
-        accountId: account?.id ?? null,
-        locationId: location.locationId,
-        hqCampaignId: campaign.id,
-      });
-      result.created.push({ post, locationName: location.locationName, accountHandle: account?.handle ?? null });
-    } catch (error) {
-      console.error(error);
-      result.skipped.push({ locationName: location.locationName, reason: "生成に失敗しました" });
+    const targetsAtLocation: (SnsAccount | null)[] = accountsForCampaign(accounts, location.locationId, campaign);
+    if (!targetsAtLocation.length) {
+      if (campaign.targetPlatforms.length) {
+        result.skipped.push({ locationName: location.locationName, reason: "対象SNSのアカウントがありません" });
+        continue;
+      }
+      targetsAtLocation.push(null);
+    }
+    for (const account of targetsAtLocation) {
+      const platform = account?.platform ?? "instagram";
+      try {
+        const { object } = await provider.generateStructuredObject(
+          buildPostCreatorRequest(
+            brain,
+            {
+              platform,
+              contentType: DEFAULT_CONTENT[platform],
+              theme: campaign.sharedTheme,
+              target: account?.strategy.targetAudience || location.demographics,
+              goal: account ? ACCOUNT_GOAL_LABELS[account.goal] : "集客",
+              tone: account?.strategy.tone ?? "",
+              notes: [campaign.creative.headline, campaign.creative.body].filter(Boolean).join(" / ").slice(0, 500),
+            },
+            { account, location, campaign },
+          ),
+        );
+        const post = await repo.createPost(organizationId, {
+          platform,
+          contentType: DEFAULT_CONTENT[platform],
+          title: object.title,
+          caption: object.caption,
+          cta: object.cta,
+          hashtags: object.hashtags,
+          status: "draft",
+          scheduledAt: campaignSlot(campaign.startsOn),
+          source: "hq_localization",
+          aiProvider: provider.name,
+          accountId: account?.id ?? null,
+          locationId: location.locationId,
+          hqCampaignId: campaign.id,
+          planning: { theme: campaign.sharedTheme.slice(0, 200), goal: account?.goal ?? campaign.goal },
+        });
+        result.created.push({ post, locationName: location.locationName, accountHandle: account?.handle ?? null });
+      } catch (error) {
+        console.error(error);
+        result.skipped.push({ locationName: location.locationName, reason: "生成に失敗しました" });
+      }
     }
   }
   for (const location of targets.slice(MAX_LOCATIONS_PER_RUN)) {

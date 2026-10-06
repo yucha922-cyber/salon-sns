@@ -4,8 +4,9 @@
  * ad analysis). Features must not assemble brand info on their own, so the
  * AI always sees the same, complete, consistently ordered picture.
  */
-import type { BrandBrainInput, HqCampaign, LocationProfile, SnsAccount } from "@/lib/domain/types";
-import { ACCOUNT_GOAL_LABELS, PLATFORM_LABELS } from "@/lib/domain/labels";
+import type { BrandBrainInput, HqCampaign, KpiTarget, LocationProfile, SnsAccount } from "@/lib/domain/types";
+import { goalLabel, PLATFORM_LABELS, WEEKDAY_LABELS } from "@/lib/domain/labels";
+import { pillarLabel } from "./content-pillars";
 import { findIndustryPreset } from "./industries";
 
 export interface BrandContext {
@@ -173,27 +174,34 @@ export interface MarketingScope {
   campaign?: HqCampaign | null;
 }
 
+export function formatKpis(kpis: KpiTarget[]): string {
+  return kpis.map((k) => (k.target === null ? k.metric : `${k.metric} ${k.target}${k.unit}`)).join("、");
+}
+
 /**
  * Extra context sections layered on the Brand Brain, in a fixed order:
  * Account Strategy → Location Customization → HQ Campaign / Localization Rules.
  * Precedence for the AI: brand rules < account strategy < location facts,
- * while HQ "localization rules" are hard constraints.
+ * while HQ required messages and localization rules are hard constraints.
  */
 export function formatScopeContext(scope: MarketingScope): string {
   const lines: string[] = [];
   const { account, location, campaign } = scope;
   if (account) {
     const s = account.strategy;
+    const days = s.preferredPostingDays.map((d) => WEEKDAY_LABELS[d]).join("・");
     lines.push(
       "## Account Strategy",
       `- アカウント: ${PLATFORM_LABELS[account.platform]} ${account.handle}${account.displayName ? `（${account.displayName}）` : ""}`,
-      `- 目的: ${ACCOUNT_GOAL_LABELS[account.goal]}`,
+      `- 目的: ${goalLabel(account.goal, account.customGoal)} (${account.goal})`,
+      `- ターゲット: ${s.targetAudience || "Brand Brainのターゲットに従う"}`,
       `- ペルソナ: ${s.persona || "Brand Brainのペルソナに従う"}`,
-      `- KPI: ${s.kpis.join("、") || "未設定"}`,
-      `- コンテンツの柱: ${s.contentPillars.join("、") || "未設定"}`,
-      `- 投稿頻度: 週${s.postsPerWeek}本${s.postingFrequencyNote ? `（${s.postingFrequencyNote}）` : ""}`,
-      `- CTA: ${s.cta || "未設定"}`,
+      `- KPI: ${formatKpis(s.kpiTargets) || "未設定"}`,
+      `- コンテンツの柱: ${s.contentPillars.map((p) => pillarLabel(p)).join("、") || "未設定"}`,
+      `- 投稿頻度: 週${s.postsPerWeek}本${s.postingFrequencyNote ? `（${s.postingFrequencyNote}）` : ""}${days ? ` / 曜日: ${days}` : ""}${s.preferredPostingTimes.length ? ` / 時間: ${s.preferredPostingTimes.join("・")}` : ""}`,
+      `- CTA戦略: ${s.cta || "未設定"}`,
       `- トーン: ${s.tone || "Brand Brainのトーンに従う"}`,
+      ...(s.notes ? [`- 運用メモ: ${s.notes}`] : []),
       "",
     );
   }
@@ -212,12 +220,17 @@ export function formatScopeContext(scope: MarketingScope): string {
   }
   if (campaign) {
     lines.push(
-      "## HQ Campaign（本部テンプレート）",
+      "## HQ Campaign（本部テーマ）",
       `- キャンペーン: ${campaign.name}${campaign.startsOn ? `（${campaign.startsOn}〜${campaign.endsOn ?? ""}）` : ""}`,
+      `- 目的: ${goalLabel(campaign.goal)}`,
       `- 共通テーマ: ${campaign.sharedTheme}`,
+      ...(campaign.contentDirections.length ? [`- コンテンツの方向性: ${campaign.contentDirections.join(" / ")}`] : []),
+      ...(campaign.optionalMessages.length ? [`- 任意で使えるメッセージ: ${campaign.optionalMessages.join(" / ")}`] : []),
+      ...(campaign.cta ? [`- 共通CTA: ${campaign.cta}`] : []),
       `- 共通クリエイティブ: 見出し「${campaign.creative.headline}」/ 本文「${campaign.creative.body}」/ ビジュアル「${campaign.creative.visual}」`,
       "",
       "## Localization Rules（必ず守る）",
+      ...campaign.requiredMessages.map((m) => `- 必須メッセージ「${m}」を必ず含める`),
       ...(campaign.localizationRules.length ? campaign.localizationRules.map((r) => `- ${r}`) : ["- 本部の共通メッセージを保ちつつ、店舗情報で具体化する"]),
       "",
     );
@@ -232,11 +245,11 @@ export function formatPortfolioContext(accounts: SnsAccount[], locations: Locati
   for (const a of accounts) {
     const loc = locations.find((l) => l.locationId === a.locationId)?.locationName ?? "本部";
     lines.push(
-      `- ${PLATFORM_LABELS[a.platform]} ${a.handle}（${loc} / 目的:${ACCOUNT_GOAL_LABELS[a.goal]} / 週${a.strategy.postsPerWeek}本 / KPI:${a.strategy.kpis.join("・") || "未設定"} / 柱:${a.strategy.contentPillars.join("・") || "未設定"}）`,
+      `- ${PLATFORM_LABELS[a.platform]} ${a.handle}（${loc} / 目的:${goalLabel(a.goal, a.customGoal)}${a.active ? "" : " / 停止中"} / 週${a.strategy.postsPerWeek}本 / KPI:${formatKpis(a.strategy.kpiTargets) || "未設定"} / 柱:${a.strategy.contentPillars.map((p) => pillarLabel(p)).join("・") || "未設定"}）`,
     );
   }
   for (const l of locations) {
-    lines.push(`- 店舗 ${l.locationName}: エリア=${l.area || "未設定"} / キーワード=${l.localKeywords.join("・") || "未設定"} / オファー=${l.offers.join("・") || "なし"}`);
+    lines.push(`- 店舗 ${l.locationName}: エリア=${l.area || "未設定"} / 客層=${l.demographics || "未設定"} / キーワード=${l.localKeywords.join("・") || "未設定"} / オファー=${l.offers.join("・") || "なし"}`);
   }
   return lines.join("\n");
 }

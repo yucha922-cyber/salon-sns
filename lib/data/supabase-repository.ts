@@ -17,11 +17,27 @@ import type {
   Post,
   SnsAccount,
   SnsAccountInput,
+  AccountGoal,
+  ContentPillar,
+  KpiTarget,
+  PlanItem,
+  PlanProposal,
+  PlanProposalInput,
+  PlanProposalStatus,
+  Recommendation,
+  RecommendationInput,
+  RecommendationStatus,
 } from "@/lib/domain/types";
+import { ACCOUNT_GOALS, EMPTY_PLANNING, SOCIAL_PLATFORMS } from "@/lib/domain/types";
+import { customPillarKey } from "@/lib/brand/content-pillars";
 import { CONTENT_TYPES } from "@/lib/domain/types";
 import { sortPosts } from "@/lib/domain/posts";
 import type { ServerSupabaseClient } from "@/lib/supabase/server";
 import type {
+  AiPlanProposalItemRow,
+  AiPlanProposalRow,
+  AiRecommendationRow,
+  ContentPillarRow,
   AccountStrategyRow,
   HqCampaignRow,
   Json,
@@ -34,6 +50,7 @@ import type {
 import {
   RepositoryError,
   type DataRepository,
+  type PlanItemPatch,
   type PostPatch,
   type SaveBrandBrainOptions,
 } from "./repository";
@@ -73,6 +90,96 @@ function toPost(row: PostRow, schedule: Pick<PostScheduleRow, "scheduled_at"> | 
     accountId: row.social_account_id,
     locationId: row.location_id,
     hqCampaignId: row.hq_campaign_id,
+    planning: {
+      theme: row.theme,
+      hook: row.hook,
+      summary: row.summary,
+      goal: toGoal(row.goal),
+      target: row.target,
+      contentPillar: row.content_pillar,
+      funnelStage: row.funnel_stage,
+      planItemId: row.plan_proposal_item_id,
+    },
+  };
+}
+
+function toGoal(value: string | null): AccountGoal | null {
+  return ACCOUNT_GOALS.find((g) => g === value) ?? null;
+}
+
+function toKpiTargets(value: unknown): KpiTarget[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((v: unknown) => {
+    if (typeof v !== "object" || v === null || !("metric" in v) || typeof v.metric !== "string") return [];
+    const target = "target" in v && typeof v.target === "number" ? v.target : null;
+    const unit = "unit" in v && typeof v.unit === "string" ? v.unit : "";
+    return [{ metric: v.metric, target, unit }];
+  });
+}
+
+function toPlanItem(row: AiPlanProposalItemRow): PlanItem {
+  return {
+    id: row.id,
+    scheduledDate: row.scheduled_date,
+    scheduledTime: row.scheduled_time.slice(0, 5),
+    platform: SOCIAL_PLATFORMS.find((p) => p === row.platform) ?? "instagram",
+    contentType: CONTENT_TYPES.find((c) => c === row.content_type) ?? "feed",
+    theme: row.theme,
+    hook: row.hook,
+    summary: row.summary,
+    goal: toGoal(row.goal) ?? "custom",
+    target: row.target,
+    contentPillar: row.content_pillar,
+    funnelStage: row.funnel_stage,
+    cta: row.cta,
+    status: row.status,
+    postId: row.post_id,
+  };
+}
+
+function toProposal(row: AiPlanProposalRow): Omit<PlanProposal, "items"> {
+  return {
+    id: row.id,
+    accountId: row.social_account_id,
+    locationId: row.location_id,
+    hqCampaignId: row.hq_campaign_id,
+    month: row.month.slice(0, 7),
+    goal: toGoal(row.goal) ?? "custom",
+    summary: row.summary,
+    aiProvider: row.ai_provider ?? "",
+    status: row.status,
+    createdAt: row.created_at,
+  };
+}
+
+function toRecommendation(row: AiRecommendationRow): Recommendation {
+  return {
+    id: row.id,
+    organizationId: row.organization_id,
+    locationId: row.location_id,
+    socialAccountId: row.social_account_id,
+    category: row.category,
+    severity: row.severity,
+    title: row.title,
+    observation: row.observation,
+    insight: row.insight,
+    hypothesis: row.hypothesis,
+    recommendedAction: row.recommended_action,
+    expectedImpact: row.expected_impact,
+    confidence: Number(row.confidence),
+    status: row.status,
+    createdAt: row.created_at,
+  };
+}
+
+function toPillar(row: ContentPillarRow): ContentPillar {
+  return {
+    id: row.id,
+    key: row.key,
+    label: row.label,
+    goal: row.goal,
+    description: row.description,
+    isSystem: row.organization_id === null,
   };
 }
 
@@ -88,16 +195,22 @@ function toAccount(row: SocialAccountRow, strategy: AccountStrategyRow | undefin
     displayName: row.display_name,
     locationId: row.location_id,
     goal: row.goal,
+    customGoal: row.custom_goal,
+    active: row.active,
     isBrandDefault: row.is_brand_default,
     connectionStatus: row.connection_status,
     strategy: {
+      targetAudience: strategy?.target_audience ?? "",
       persona: strategy?.persona ?? "",
-      kpis: strategy?.kpis ?? [],
+      kpiTargets: toKpiTargets(strategy?.kpi_targets),
       contentPillars: strategy?.content_pillars ?? [],
       postsPerWeek: strategy?.posts_per_week ?? 3,
       postingFrequencyNote: strategy?.posting_frequency_note ?? "",
+      preferredPostingDays: strategy?.preferred_posting_days ?? [],
+      preferredPostingTimes: strategy?.preferred_posting_times ?? [],
       cta: strategy?.cta ?? "",
       tone: strategy?.tone ?? "",
+      notes: strategy?.notes ?? "",
     },
   };
 }
@@ -113,7 +226,26 @@ function toHqCampaign(row: HqCampaignRow): HqCampaign {
     creative: { headline: row.creative_headline, body: row.creative_body, visual: row.creative_visual },
     localizationRules: row.localization_rules,
     targetLocationIds: row.target_location_ids,
+    goal: row.goal,
+    targetPlatforms: row.target_platforms.flatMap((p) => SOCIAL_PLATFORMS.filter((x) => x === p)),
+    contentDirections: row.content_directions,
+    requiredMessages: row.required_messages,
+    optionalMessages: row.optional_messages,
+    cta: row.cta,
     createdAt: row.created_at,
+  };
+}
+
+function planningColumns(p: import("@/lib/domain/types").PostPlanning) {
+  return {
+    theme: p.theme,
+    hook: p.hook,
+    summary: p.summary,
+    goal: p.goal,
+    target: p.target,
+    content_pillar: p.contentPillar,
+    funnel_stage: p.funnelStage,
+    plan_proposal_item_id: p.planItemId,
   };
 }
 
@@ -307,6 +439,7 @@ export class SupabaseRepository implements DataRepository {
         social_account_id: input.accountId ?? null,
         location_id: input.locationId ?? null,
         hq_campaign_id: input.hqCampaignId ?? null,
+        ...planningColumns({ ...EMPTY_PLANNING, ...input.planning }),
       })
       .select("*")
       .single();
@@ -328,7 +461,7 @@ export class SupabaseRepository implements DataRepository {
   async updatePost(organizationId: ID, postId: ID, patch: PostPatch): Promise<Post> {
     const { data: row, error } = await this.db
       .from("posts")
-      .update({ title: patch.title, caption: patch.caption, status: patch.status })
+      .update({ title: patch.title, caption: patch.caption, cta: patch.cta, hashtags: patch.hashtags, status: patch.status })
       .eq("id", postId)
       .eq("organization_id", organizationId)
       .select("*")
@@ -458,6 +591,8 @@ export class SupabaseRepository implements DataRepository {
       display_name: input.displayName,
       location_id: input.locationId,
       goal: input.goal,
+      custom_goal: input.customGoal,
+      active: input.active,
     };
     let row: SocialAccountRow | null;
     if (accountId) {
@@ -491,13 +626,18 @@ export class SupabaseRepository implements DataRepository {
         {
           organization_id: organizationId,
           social_account_id: row.id,
+          target_audience: input.strategy.targetAudience,
           persona: input.strategy.persona,
-          kpis: input.strategy.kpis,
+          kpis: input.strategy.kpiTargets.map((k) => k.metric),
+          kpi_targets: input.strategy.kpiTargets.map((k) => ({ metric: k.metric, target: k.target, unit: k.unit })),
           content_pillars: input.strategy.contentPillars,
           posts_per_week: input.strategy.postsPerWeek,
           posting_frequency_note: input.strategy.postingFrequencyNote,
+          preferred_posting_days: input.strategy.preferredPostingDays,
+          preferred_posting_times: input.strategy.preferredPostingTimes,
           cta: input.strategy.cta,
           tone: input.strategy.tone,
+          notes: input.strategy.notes,
         },
         { onConflict: "social_account_id" },
       )
@@ -597,6 +737,12 @@ export class SupabaseRepository implements DataRepository {
       creative_visual: input.creative.visual,
       localization_rules: input.localizationRules,
       target_location_ids: input.targetLocationIds.filter((id) => UUID_RE.test(id)),
+      goal: input.goal,
+      target_platforms: input.targetPlatforms,
+      content_directions: input.contentDirections,
+      required_messages: input.requiredMessages,
+      optional_messages: input.optionalMessages,
+      cta: input.cta,
     };
     const query = campaignId
       ? this.db.from("hq_campaigns").update(fields).eq("id", campaignId).eq("organization_id", organizationId)
@@ -610,5 +756,211 @@ export class SupabaseRepository implements DataRepository {
   async deleteHqCampaign(organizationId: ID, campaignId: ID): Promise<void> {
     const { error } = await this.db.from("hq_campaigns").delete().eq("id", campaignId).eq("organization_id", organizationId);
     fail(error, "deleteHqCampaign");
+  }
+
+  // -------------------------------------------------------------------------
+  // Content pillars
+  // -------------------------------------------------------------------------
+
+  async listContentPillars(organizationId: ID): Promise<ContentPillar[]> {
+    // RLS returns system presets (organization_id null) + this organization's pillars.
+    const { data, error } = await this.db
+      .from("content_pillars")
+      .select("*")
+      .or(`organization_id.is.null,organization_id.eq.${organizationId}`)
+      .order("goal")
+      .order("sort_order");
+    fail(error, "listContentPillars");
+    return (data ?? []).map(toPillar);
+  }
+
+  async createContentPillar(
+    organizationId: ID,
+    input: { goal: AccountGoal; label: string; description: string },
+  ): Promise<ContentPillar> {
+    const key = customPillarKey(input.label);
+    const { data, error } = await this.db
+      .from("content_pillars")
+      .upsert(
+        { organization_id: organizationId, goal: input.goal, key, label: input.label, description: input.description },
+        { onConflict: "organization_id,key", ignoreDuplicates: false },
+      )
+      .select("*")
+      .single();
+    fail(error, "createContentPillar");
+    if (!data) throw new RepositoryError("pillar not saved");
+    return toPillar(data);
+  }
+
+  // -------------------------------------------------------------------------
+  // Plan proposals
+  // -------------------------------------------------------------------------
+
+  async createPlanProposal(organizationId: ID, input: PlanProposalInput): Promise<PlanProposal> {
+    const { data: row, error } = await this.db
+      .from("ai_plan_proposals")
+      .insert({
+        organization_id: organizationId,
+        social_account_id: input.accountId,
+        location_id: input.locationId,
+        hq_campaign_id: input.hqCampaignId,
+        month: `${input.month}-01`,
+        goal: input.goal,
+        summary: input.summary,
+        ai_provider: input.aiProvider,
+        created_by: this.userId,
+      })
+      .select("*")
+      .single();
+    fail(error, "createPlanProposal");
+    if (!row) throw new RepositoryError("proposal not saved");
+    const { data: items, error: itemsError } = await this.db
+      .from("ai_plan_proposal_items")
+      .insert(
+        input.items.map((item, i) => ({
+          organization_id: organizationId,
+          proposal_id: row.id,
+          scheduled_date: item.scheduledDate,
+          scheduled_time: item.scheduledTime,
+          platform: item.platform,
+          content_type: item.contentType,
+          theme: item.theme,
+          hook: item.hook,
+          summary: item.summary,
+          goal: item.goal,
+          target: item.target,
+          content_pillar: item.contentPillar,
+          funnel_stage: item.funnelStage,
+          cta: item.cta,
+          sort_order: i,
+        })),
+      )
+      .select("*");
+    fail(itemsError, "createPlanProposal.items");
+    return { ...toProposal(row), items: (items ?? []).sort((a, b) => a.sort_order - b.sort_order).map(toPlanItem) };
+  }
+
+  async listPlanProposals(organizationId: ID): Promise<Omit<PlanProposal, "items">[]> {
+    const { data, error } = await this.db
+      .from("ai_plan_proposals")
+      .select("*")
+      .eq("organization_id", organizationId)
+      .order("created_at", { ascending: false })
+      .limit(50);
+    fail(error, "listPlanProposals");
+    return (data ?? []).map(toProposal);
+  }
+
+  async getPlanProposal(organizationId: ID, proposalId: ID): Promise<PlanProposal | null> {
+    if (!UUID_RE.test(proposalId)) return null;
+    const { data: row, error } = await this.db
+      .from("ai_plan_proposals")
+      .select("*")
+      .eq("id", proposalId)
+      .eq("organization_id", organizationId)
+      .maybeSingle();
+    fail(error, "getPlanProposal");
+    if (!row) return null;
+    const { data: items, error: itemsError } = await this.db
+      .from("ai_plan_proposal_items")
+      .select("*")
+      .eq("proposal_id", row.id)
+      .order("sort_order");
+    fail(itemsError, "getPlanProposal.items");
+    return { ...toProposal(row), items: (items ?? []).map(toPlanItem) };
+  }
+
+  async updatePlanItem(organizationId: ID, itemId: ID, patch: PlanItemPatch): Promise<PlanItem> {
+    // undefined keys are dropped by JSON serialization → only provided fields change
+    const columns: Partial<AiPlanProposalItemRow> = {
+      scheduled_date: patch.scheduledDate,
+      scheduled_time: patch.scheduledTime,
+      platform: patch.platform,
+      content_type: patch.contentType,
+      theme: patch.theme,
+      hook: patch.hook,
+      summary: patch.summary,
+      goal: patch.goal,
+      target: patch.target,
+      content_pillar: patch.contentPillar,
+      funnel_stage: patch.funnelStage,
+      cta: patch.cta,
+      status: patch.status,
+      post_id: patch.postId,
+    };
+    const { data, error } = await this.db
+      .from("ai_plan_proposal_items")
+      .update(columns)
+      .eq("id", itemId)
+      .eq("organization_id", organizationId)
+      .select("*")
+      .single();
+    fail(error, "updatePlanItem");
+    if (!data) throw new RepositoryError("plan item not found", "not_found");
+    return toPlanItem(data);
+  }
+
+  async setPlanProposalStatus(organizationId: ID, proposalId: ID, status: PlanProposalStatus): Promise<void> {
+    const { error } = await this.db
+      .from("ai_plan_proposals")
+      .update({ status })
+      .eq("id", proposalId)
+      .eq("organization_id", organizationId);
+    fail(error, "setPlanProposalStatus");
+  }
+
+  // -------------------------------------------------------------------------
+  // Recommendations
+  // -------------------------------------------------------------------------
+
+  async listRecommendations(organizationId: ID): Promise<Recommendation[]> {
+    const { data, error } = await this.db
+      .from("ai_recommendations")
+      .select("*")
+      .eq("organization_id", organizationId)
+      .order("created_at", { ascending: false })
+      .limit(100);
+    fail(error, "listRecommendations");
+    return (data ?? []).map(toRecommendation);
+  }
+
+  async createRecommendations(organizationId: ID, inputs: RecommendationInput[]): Promise<Recommendation[]> {
+    if (!inputs.length) return [];
+    const brand = await this.getBrandRow(organizationId);
+    const { data, error } = await this.db
+      .from("ai_recommendations")
+      .insert(
+        inputs.map((r) => ({
+          organization_id: organizationId,
+          brand_id: brand?.id ?? null,
+          location_id: r.locationId,
+          social_account_id: r.socialAccountId,
+          category: r.category,
+          severity: r.severity,
+          title: r.title,
+          observation: r.observation,
+          insight: r.insight,
+          hypothesis: r.hypothesis,
+          recommended_action: r.recommendedAction,
+          expected_impact: r.expectedImpact,
+          confidence: r.confidence,
+        })),
+      )
+      .select("*");
+    fail(error, "createRecommendations");
+    return (data ?? []).map(toRecommendation);
+  }
+
+  async setRecommendationStatus(organizationId: ID, recommendationId: ID, status: RecommendationStatus): Promise<Recommendation> {
+    const { data, error } = await this.db
+      .from("ai_recommendations")
+      .update({ status, decided_by: this.userId, decided_at: new Date().toISOString() })
+      .eq("id", recommendationId)
+      .eq("organization_id", organizationId)
+      .select("*")
+      .single();
+    fail(error, "setRecommendationStatus");
+    if (!data) throw new RepositoryError("recommendation not found", "not_found");
+    return toRecommendation(data);
   }
 }

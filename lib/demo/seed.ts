@@ -11,14 +11,14 @@ import type {
   Campaign,
   HqCampaignInput,
   LocationProfileInput,
+  RecommendationInput,
   SnsAccountInput,
   MetricSummary,
   NewPostInput,
-  Recommendation,
 } from "@/lib/domain/types";
 import { jstDateKey } from "@/lib/domain/dates";
 
-export const DEMO_ORGANIZATION_NAME = "NAORU整体 渋谷院";
+export const DEMO_ORGANIZATION_NAME = "NAORU Demo HQ";
 
 export const DEMO_ACCOUNT = {
   email: "demo@naoru.jp",
@@ -28,20 +28,21 @@ export const DEMO_ACCOUNT = {
 
 export const DEMO_BRAND_BRAIN: BrandBrainInput = {
   companyName: "NAORU 株式会社",
-  brandName: "NAORU整体 渋谷院",
+  brandName: "NAORU整体",
   industry: { key: "seitai", label: "整体 / Healthcare / Wellness" },
   businessDescription:
     "渋谷駅徒歩5分の完全個室の整体院。AI姿勢分析と国家資格保有者の施術で、デスクワークによる肩こり・首こり・姿勢の崩れを根本からケアします。",
   website: "naorusalon.jp/shibuya",
   social: {
-    instagram: "@naoru_official",
+    instagram: "",
     threads: "@naoru_official",
-    tiktok: "@naoru_official",
+    tiktok: "",
     facebook: "",
   },
   locations: [
     { name: "NAORU整体 渋谷院", address: "東京都渋谷区渋谷 2-14-13 岡崎ビル 5F" },
-    { name: "NAORU整体 新宿院", address: "東京都新宿区西新宿 1-5-2 3F" },
+    { name: "NAORU整体 池袋院", address: "東京都豊島区南池袋 1-20-5 4F" },
+    { name: "NAORU整体 横浜院", address: "神奈川県横浜市西区北幸 2-8-4 2F" },
   ],
   services: [
     { name: "全身整体コース", description: "60分。姿勢分析つきの全身調整。", price: 8800 },
@@ -187,150 +188,309 @@ export const DEMO_CAMPAIGNS: Campaign[] = [
   { id: "demo-c4", name: "初回カウンセリング訴求", status: "paused", spend: 64800, impressions: 14520, ctr: 1.94, clicks: 282, conversions: 13, roas: 3.0 },
 ];
 
-export const DEMO_RECOMMENDATIONS: Recommendation[] = [
-  {
-    id: "demo-r1",
-    kind: "creative_fatigue",
-    title: "クリエイティブのCTRが低下しています",
-    body: "「美容整体 Before/After」のCTRが過去7日平均から28%低下しました。LPのCVRは維持されているため、ファーストビューの差し替えをおすすめします。",
-    meta: "美容整体 Before/After · 2時間前 · 影響度 中",
-    metric: "CTR −28%",
-    tone: "warning",
-  },
-  {
-    id: "demo-r2",
-    kind: "content_opportunity",
-    title: "保存率の高い投稿テーマが見つかりました",
-    body: "「姿勢リセット」の保存率が平均比+32%。デスクワーカー向けのHow-toシリーズを継続し、プロフィールリンクへのCTAを加えてみましょう。",
-    meta: "Instagram · 昨日 · 成長機会",
-    metric: "保存 +32%",
-    tone: "positive",
-  },
-  {
-    id: "demo-r3",
-    kind: "budget_allocation",
-    title: "広告費を効率よく配分できそうです",
-    body: "「仕事帰りの整体体験」はROAS 4.1xで安定。低調なクリエイティブの予算を段階的に配分する案を作成しました。",
-    meta: "Meta広告 · 3日前 · 最適化案",
-    metric: "ROAS 4.1x",
-    tone: "positive",
-  },
-];
-
 // ---------------------------------------------------------------------------
-// Accounts / location customization / HQ template (indexes refer to
-// DEMO_BRAND_BRAIN.locations: 0 = 渋谷院, 1 = 新宿院, null = HQ)
+// HQ operations demo: 3 locations × (Instagram + Threads) + HQ accounts.
+// locationIndex refers to DEMO_BRAND_BRAIN.locations (0 渋谷院, 1 池袋院, 2 横浜院),
+// null = HQ account.
 // ---------------------------------------------------------------------------
 
-export const DEMO_ACCOUNTS: (Omit<SnsAccountInput, "locationId"> & { locationIndex: number | null })[] = [
-  {
-    platform: "instagram",
-    handle: "@naoru_official",
-    displayName: "NAORU 本部",
-    locationIndex: null,
-    goal: "branding",
-    strategy: {
-      persona: "姿勢や体のケアに関心がある28〜42歳。整体院を比較検討していて、信頼できるブランドかを確かめたい。",
-      kpis: ["フォロワー数", "エンゲージメント率", "指名検索数"],
-      contentPillars: ["姿勢の専門コラム", "NAORUの想い", "店舗ネットワーク紹介", "季節キャンペーン"],
-      postsPerWeek: 3,
-      postingFrequencyNote: "世界観を揃えたフィード中心",
-      cta: "お近くの店舗はプロフィールから",
-      tone: "上品で信頼感のある専門家トーン",
-    },
-  },
+type DemoAccount = Omit<SnsAccountInput, "locationId"> & { locationIndex: number | null };
+
+const acquisitionPillars = ["problem_awareness", "education", "selfcare", "before_after", "testimonial", "offer"];
+
+export const DEMO_ACCOUNTS: DemoAccount[] = [
   {
     platform: "instagram",
     handle: "@naoru_shibuya",
-    displayName: "渋谷院",
+    displayName: "渋谷院 Instagram",
     locationIndex: 0,
     goal: "acquisition",
+    customGoal: "",
+    active: true,
     strategy: {
-      persona: "渋谷勤務の30代女性デスクワーカー。夕方の肩こりがつらく、仕事帰りに通える整体を探している。",
-      kpis: ["プロフィール経由の予約数", "保存数", "プロフィールアクセス数"],
-      contentPillars: ["デスクでできるセルフケア", "AI姿勢分析の紹介", "スタッフ紹介", "渋谷院限定オファー"],
+      targetAudience: "30代女性 / 渋谷勤務 / デスクワーク",
+      persona: "IT企業勤務・32歳。夕方になると肩と首が重く、仕事帰りに通える整体を探している。",
+      kpiTargets: [
+        { metric: "プロフィールアクセス", target: 1500, unit: "回/月" },
+        { metric: "LINE登録", target: 60, unit: "件/月" },
+        { metric: "予約数", target: 40, unit: "件/月" },
+      ],
+      contentPillars: acquisitionPillars,
       postsPerWeek: 4,
-      postingFrequencyNote: "Reel2本・フィード2本",
-      cta: "LINEで24時間予約受付中",
+      postingFrequencyNote: "Reel2本・カルーセル2本",
+      preferredPostingDays: [0, 1, 3, 5],
+      preferredPostingTimes: ["20:00"],
+      cta: "LINE予約（主導線）/ プロフィールリンク",
       tone: "やさしく、話しかけるように",
+      notes: "肩こり・姿勢・セルフケアを中心に。Before/Afterと口コミは許諾済みのみ。",
+    },
+  },
+  {
+    platform: "threads",
+    handle: "@naoru_shibuya_threads",
+    displayName: "渋谷院 Threads",
+    locationIndex: 0,
+    goal: "acquisition",
+    customGoal: "",
+    active: true,
+    strategy: {
+      targetAudience: "30代女性 / 渋谷勤務 / デスクワーク",
+      persona: "お昼休みにスマホを見る会社員。共感できる短い言葉に反応する。",
+      kpiTargets: [
+        { metric: "プロフィールアクセス", target: 400, unit: "回/月" },
+        { metric: "LINE登録", target: 15, unit: "件/月" },
+      ],
+      contentPillars: ["problem_awareness", "selfcare", "faq"],
+      postsPerWeek: 5,
+      postingFrequencyNote: "平日のお昼に短文",
+      preferredPostingDays: [1, 2, 3, 4, 5],
+      preferredPostingTimes: ["12:00"],
+      cta: "プロフィールのLINEから予約",
+      tone: "友だちに話すような短い言葉",
+      notes: "",
     },
   },
   {
     platform: "instagram",
-    handle: "@naoru_shinjuku",
-    displayName: "新宿院",
+    handle: "@naoru_ikebukuro",
+    displayName: "池袋院 Instagram",
     locationIndex: 1,
     goal: "acquisition",
+    customGoal: "",
+    active: true,
     strategy: {
-      persona: "西新宿のオフィスで働く30〜40代。腰痛と眼精疲労に悩み、昼休みや仕事帰りの短時間ケアを求めている。",
-      kpis: ["プロフィール経由の予約数", "保存数"],
-      contentPillars: ["腰痛・眼精疲労ケア", "昼休み30分コース", "スタッフ紹介"],
+      targetAudience: "池袋勤務の会社員 / 20〜40代 / 男女",
+      persona: "池袋の営業職・38歳。腰痛と目の疲れがあり、昼休みや仕事帰りに短時間でケアしたい。",
+      kpiTargets: [
+        { metric: "プロフィールアクセス", target: 1000, unit: "回/月" },
+        { metric: "予約数", target: 30, unit: "件/月" },
+      ],
+      contentPillars: ["problem_awareness", "education", "staff_expertise", "offer"],
       postsPerWeek: 3,
       postingFrequencyNote: "Reel1本・フィード2本",
-      cta: "ご予約はプロフィールのリンクから",
+      preferredPostingDays: [1, 3, 5],
+      preferredPostingTimes: ["19:00"],
+      cta: "ホットペッパー・LINEから予約",
       tone: "テキパキと頼れるトーン",
+      notes: "",
+    },
+  },
+  {
+    platform: "threads",
+    handle: "@naoru_ikebukuro_threads",
+    displayName: "池袋院 Threads",
+    locationIndex: 1,
+    goal: "acquisition",
+    customGoal: "",
+    active: true,
+    strategy: {
+      targetAudience: "池袋勤務の会社員",
+      persona: "",
+      kpiTargets: [{ metric: "プロフィールアクセス", target: 300, unit: "回/月" }],
+      contentPillars: ["problem_awareness", "selfcare"],
+      postsPerWeek: 3,
+      postingFrequencyNote: "",
+      preferredPostingDays: [2, 4, 6],
+      preferredPostingTimes: ["12:00"],
+      cta: "プロフィールから予約",
+      tone: "テキパキと頼れるトーン",
+      notes: "",
+    },
+  },
+  {
+    platform: "instagram",
+    handle: "@naoru_yokohama",
+    displayName: "横浜院 Instagram",
+    locationIndex: 2,
+    goal: "acquisition",
+    customGoal: "",
+    active: true,
+    strategy: {
+      targetAudience: "地域住民 / 30〜50代 / 子育て世代・主婦層",
+      persona: "横浜在住・44歳。家事と子育てで腰と肩がつらく、土日や日中に通える近所の整体を探している。",
+      kpiTargets: [
+        { metric: "プロフィールアクセス", target: 800, unit: "回/月" },
+        { metric: "予約数", target: 25, unit: "件/月" },
+      ],
+      contentPillars: ["problem_awareness", "selfcare", "testimonial", "faq"],
+      postsPerWeek: 3,
+      postingFrequencyNote: "フィード中心",
+      preferredPostingDays: [2, 4, 6],
+      preferredPostingTimes: ["10:00"],
+      cta: "お電話・LINEで予約",
+      tone: "あたたかく、ご近所の安心感",
+      notes: "",
+    },
+  },
+  {
+    platform: "threads",
+    handle: "@naoru_yokohama_threads",
+    displayName: "横浜院 Threads",
+    locationIndex: 2,
+    goal: "retention",
+    customGoal: "",
+    active: true,
+    strategy: {
+      targetAudience: "横浜院に来店したことのあるお客様",
+      persona: "",
+      kpiTargets: [{ metric: "再来店率", target: 60, unit: "%" }],
+      contentPillars: ["aftercare", "selfcare", "member_info"],
+      postsPerWeek: 3,
+      postingFrequencyNote: "",
+      preferredPostingDays: [1, 3, 5],
+      preferredPostingTimes: ["09:00"],
+      cta: "次回のご予約はLINEから",
+      tone: "あたたかく、寄り添うように",
+      notes: "",
     },
   },
   {
     platform: "instagram",
     handle: "@naoru_recruit",
-    displayName: "NAORU 採用",
+    displayName: "NAORU 採用（本部）",
     locationIndex: null,
     goal: "recruitment",
+    customGoal: "",
+    active: true,
     strategy: {
-      persona: "技術を伸ばしたい20〜30代の柔道整復師・理学療法士。働きやすさと教育体制を重視している。",
-      kpis: ["応募数", "見学申込数"],
-      contentPillars: ["スタッフの1日", "教育・研修制度", "働く環境", "代表メッセージ"],
+      targetAudience: "20〜30代 / 理学療法士・柔道整復師・セラピスト",
+      persona: "臨床経験3年の理学療法士・27歳。技術を伸ばしたいが、今の職場では教育体制や将来像が見えない。",
+      kpiTargets: [
+        { metric: "採用ページクリック", target: 80, unit: "回/月" },
+        { metric: "DM", target: 10, unit: "件/月" },
+        { metric: "応募数", target: 4, unit: "件/月" },
+      ],
+      contentPillars: ["staff_story", "day_in_the_life", "training", "career", "benefits", "culture"],
       postsPerWeek: 2,
-      postingFrequencyNote: "Reel1本・フィード1本",
-      cta: "見学・カジュアル面談はDMから",
-      tone: "等身大で誠実に",
+      postingFrequencyNote: "Reel1本・カルーセル1本",
+      preferredPostingDays: [2, 6],
+      preferredPostingTimes: ["21:00"],
+      cta: "採用ページ / DMでカジュアル面談",
+      tone: "等身大で誠実に、スタッフ本人の言葉で",
+      notes: "給与・休日は本部人事の確認済みの情報のみ使う。",
+    },
+  },
+  {
+    platform: "threads",
+    handle: "@naoru_official",
+    displayName: "NAORU 本部",
+    locationIndex: null,
+    goal: "branding",
+    customGoal: "",
+    active: true,
+    strategy: {
+      targetAudience: "体のケアに関心がある20〜50代",
+      persona: "",
+      kpiTargets: [{ metric: "フォロワー数", target: null, unit: "人" }],
+      contentPillars: ["brand_story", "expertise_column", "network"],
+      postsPerWeek: 3,
+      postingFrequencyNote: "",
+      preferredPostingDays: [1, 3, 5],
+      preferredPostingTimes: ["08:00"],
+      cta: "お近くの店舗はプロフィールから",
+      tone: "上品で信頼感のある専門家トーン",
+      notes: "",
     },
   },
 ];
 
 export const DEMO_LOCATION_PROFILES: LocationProfileInput[] = [
   {
-    area: "渋谷・表参道",
-    demographics: "20代後半〜40代のオフィスワーカー。女性比率が高く、仕事帰り（18〜21時）の来店が多い。",
+    area: "渋谷",
+    demographics: "渋谷・表参道で働く20代後半〜40代のオフィスワーカー。女性比率が高く、仕事帰り（18〜21時）の来店が多い。",
     featuredServices: ["美容整体コース", "初回カウンセリング"],
     staff: [
       { name: "佐藤 結衣", role: "院長", specialty: "姿勢分析・美容整体" },
       { name: "高橋 健", role: "施術スタッフ", specialty: "肩こり・首こり" },
     ],
     offers: ["平日19時以降のご予約で+10分延長"],
-    localKeywords: ["渋谷整体", "表参道整体", "渋谷肩こり"],
+    localKeywords: ["渋谷整体", "渋谷肩こり", "表参道整体"],
   },
   {
-    area: "西新宿",
-    demographics: "30〜40代の男女オフィスワーカー。昼休みと平日夜の短時間利用が中心。",
+    area: "池袋",
+    demographics: "池袋駅周辺で働く20〜40代の会社員。男性比率がやや高く、昼休みと平日夜の短時間利用が中心。",
     featuredServices: ["全身整体コース"],
     staff: [{ name: "中村 大輔", role: "院長", specialty: "腰痛・骨盤調整" }],
     offers: ["昼休み30分クイックコース ¥4,400"],
-    localKeywords: ["新宿整体", "西新宿腰痛"],
+    localKeywords: ["池袋整体", "池袋腰痛"],
+  },
+  {
+    area: "横浜",
+    demographics: "横浜駅周辺に住む30〜50代の地域住民。子育て世代・主婦層が多く、平日日中と土日の来店が中心。",
+    featuredServices: ["全身整体コース", "初回カウンセリング"],
+    staff: [{ name: "山田 美穂", role: "院長", specialty: "産後ケア・骨盤調整" }],
+    offers: ["お子さま連れOK（キッズスペースあり）"],
+    localKeywords: ["横浜整体", "横浜駅整体", "産後骨盤矯正横浜"],
   },
 ];
 
 export function buildDemoHqCampaign(now: Date = new Date()): Omit<HqCampaignInput, "targetLocationIds"> {
-  const [y, m, d] = jstDateKey(now).split("-").map(Number) as [number, number, number];
-  const day = (offset: number) => new Date(Date.UTC(y, m - 1, d + offset)).toISOString().slice(0, 10);
+  const [y, m] = jstDateKey(now).split("-").map(Number) as [number, number, number];
+  const first = new Date(Date.UTC(y, m - 1, 1)).toISOString().slice(0, 10);
+  const last = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
   return {
-    name: "秋の姿勢改善キャンペーン",
+    name: `${m}月テーマ「デスクワーク×姿勢改善」`,
     status: "active",
-    startsOn: day(3),
-    endsOn: day(33),
-    sharedTheme: "季節の変わり目の不調を、姿勢から整える。初回姿勢チェック無料",
+    goal: "acquisition",
+    startsOn: first,
+    endsOn: last,
+    sharedTheme: "デスクワークで崩れた姿勢を整え、肩こり・首こりを根本からケアする。今月は全店舗で肩こり訴求",
+    contentDirections: ["デスクワーク中のNG姿勢", "1分でできるセルフケア", "AI姿勢分析で変化を見える化"],
+    requiredMessages: ["初回姿勢チェック無料"],
+    optionalMessages: ["仕事帰りに通える", "国家資格保有者が担当"],
+    cta: "LINEから初回予約",
     creative: {
-      headline: "その不調、姿勢からかもしれません。",
-      body: "AI姿勢分析で今の姿勢を見える化。秋のキャンペーン期間中は初回姿勢チェックが無料です。",
-      visual: "白背景・自然光。姿勢分析の画面と施術シーン。ブランドカラーのグリーンを1点だけ使う",
+      headline: "その肩こり、姿勢からかもしれません。",
+      body: "AI姿勢分析で今の姿勢を見える化。今月は初回姿勢チェックが無料です。",
+      visual: "白背景・自然光。デスクワーク中の姿勢と施術シーン。ブランドカラーのグリーンを1点だけ使う",
     },
     localizationRules: [
       "見出しとキャンペーン名は本部の表記を変えない",
-      "冒頭に店舗のエリア名を入れる",
+      "冒頭に店舗のエリアとターゲットの働き方・暮らし方を入れる（渋谷=渋谷勤務の女性、池袋=池袋勤務の会社員、横浜=地域住民）",
       "店舗独自のオファーがあれば最後に1つだけ追記する",
       "ハッシュタグに店舗のローカルキーワードを必ず含める",
       "「治る」「必ず改善」などの断定表現は使わない",
     ],
+    targetPlatforms: ["instagram", "threads"],
   };
 }
+
+/** Recommendations seeded for the demo (handles are resolved to account ids). */
+export const DEMO_RECOMMENDATIONS: (Omit<RecommendationInput, "locationId" | "socialAccountId"> & { accountHandle: string | null })[] = [
+  {
+    accountHandle: "@naoru_ikebukuro",
+    category: "acquisition",
+    severity: "high",
+    title: "池袋院Instagramの今月の投稿計画が不足しています",
+    observation: "今月の予定投稿が0本で、戦略上の目標（週3本）に届いていません。",
+    insight: "池袋の会社員は昼休みの閲覧が多く、投稿が途切れると来店検討の接点がなくなります。",
+    hypothesis: "腰痛セルフケアと昼休み30分コースの投稿で、プロフィールアクセスが回復する可能性があります。",
+    recommendedAction: "SNS Plannerの「AIで1ヶ月分作成」で池袋院Instagramの企画を作り、確認・承認してください。",
+    expectedImpact: "予約導線への流入増加",
+    confidence: 0.75,
+  },
+  {
+    accountHandle: "@naoru_recruit",
+    category: "recruitment",
+    severity: "medium",
+    title: "採用アカウントで「キャリア理解」の投稿が不足しています",
+    observation: "直近の採用投稿は「1日の仕事」に偏り、キャリアパスや研修の発信がありません。",
+    insight: "応募前の求職者は「3年後どうなれるか」を重視します。",
+    hypothesis: "キャリアパスと研修のカルーセルを追加すると、採用ページクリックが伸びる可能性があります。",
+    recommendedAction: "採用アカウントの月間計画で、後半に「キャリア理解」「応募」の投稿を入れてください。",
+    expectedImpact: "採用ページクリック・DMの増加",
+    confidence: 0.7,
+  },
+  {
+    accountHandle: null,
+    category: "strategy",
+    severity: "low",
+    title: "本部テーマ「デスクワーク×姿勢改善」を横浜院向けにローカライズしましょう",
+    observation: "横浜院のターゲットは地域住民（子育て世代）で、デスクワーク訴求とずれがあります。",
+    insight: "同じテーマでも、横浜院は「家事・育児の姿勢」に置き換えると共感が得やすくなります。",
+    hypothesis: "ローカライズルールに沿って生活シーンを置き換えると、保存数が維持できる可能性があります。",
+    recommendedAction: "本部テンプレートの「全店舗の下書きを生成」で横浜院の案を確認し、表現を調整してください。",
+    expectedImpact: "全店舗で一貫したキャンペーン訴求",
+    confidence: 0.6,
+  },
+];

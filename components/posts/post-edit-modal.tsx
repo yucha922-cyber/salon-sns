@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import type { Post, PostStatus } from "@/lib/domain/types";
@@ -71,6 +72,16 @@ function PostEditForm({ post, onClose }: { post: Post; onClose: () => void }) {
         <textarea id="editCaption" className="textarea" value={caption} onChange={(e) => setCaption(e.target.value)} />
       </Field>
       {post.hashtags.length > 0 && <div className="field-hint hashtag-preview">{post.hashtags.join(" ")}</div>}
+      {(post.planning.hook || post.planning.summary) && (
+        <div className="recommendation-callout" style={{ marginBottom: 12 }}>
+          <b>企画</b>{post.planning.funnelStage && <span className="stage-pill" style={{ marginLeft: 6 }}>{post.planning.funnelStage}</span>}<br />
+          {post.planning.hook && <>フック：{post.planning.hook}<br /></>}
+          {post.planning.summary}
+          <div style={{ marginTop: 8 }}>
+            <Link className="button small soft" href={`/creator?post=${post.id}`}>{post.caption.trim() ? "AIでキャプションを作り直す →" : "AIでキャプションを作成 →"}</Link>
+          </div>
+        </div>
+      )}
       <div className="two-fields">
         <Field label="ステータス" htmlFor="editStatus">
           <select id="editStatus" className="select" value={status} onChange={(e) => setStatus(e.target.value as PostStatus)}>
