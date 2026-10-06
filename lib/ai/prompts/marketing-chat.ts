@@ -6,7 +6,11 @@ import { brandSystemBlock, first, SAFETY_RULES } from "./shared";
  * 専属AIマーケター: answers marketing questions as a member of the
  * customer's team, grounded in the current organization's Brand Brain.
  */
-export function buildMarketingChatRequest(brain: BrandBrainInput, history: AIChatTurn[]): GenerateTextRequest {
+export function buildMarketingChatRequest(
+  brain: BrandBrainInput,
+  history: AIChatTurn[],
+  portfolio = "",
+): GenerateTextRequest {
   const { ctx, text } = brandSystemBlock(brain);
   const system = [
     `あなたは「${ctx.brand.name}」専属のAIマーケターです。SNS運用・広告・集客の相談に、チームの一員として具体的に答えます。`,
@@ -15,9 +19,11 @@ export function buildMarketingChatRequest(brain: BrandBrainInput, history: AICha
     "- 投稿案や広告案は、すぐ使える具体例（テーマ、構成、コピー例、CTA）で示す。",
     "- 日本語で、見出しや箇条書きを使い簡潔に。最後に次の一手を1つ提案する。",
     "- 投稿化したい案は「AI投稿作成」で作成・保存できることを必要に応じて案内する。",
+    "- 複数アカウント・店舗がある場合は、どのアカウント（目的: 集客/採用/ブランディング）・どの店舗向けの提案かを明示する。",
     SAFETY_RULES,
     "",
     text,
+    portfolio ? `\n${portfolio}` : "",
   ].join("\n");
 
   const lastUser = [...history].reverse().find((m) => m.role === "user")?.content ?? "";

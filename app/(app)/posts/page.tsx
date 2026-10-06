@@ -5,12 +5,13 @@ import { PostsTable } from "@/components/posts/posts-table";
 
 export default async function PostsPage() {
   const { repo, current } = await requireAppContext();
-  const posts = await repo.listPosts(current.organization.id);
+  const [posts, accounts] = await Promise.all([repo.listPosts(current.organization.id), repo.listAccounts(current.organization.id)]);
+  const accountLabels = Object.fromEntries(accounts.map((a) => [a.id, a.handle]));
   return (
     <>
       <PageHeading eyebrow="コンテンツ管理" title="投稿一覧" description="すべてのSNS投稿をまとめて管理。"
         actions={<Link className="button primary" href="/creator"><span className="plus">＋</span> 投稿を作成</Link>} />
-      <PostsTable posts={posts} />
+      <PostsTable posts={posts} accountLabels={accountLabels} />
     </>
   );
 }

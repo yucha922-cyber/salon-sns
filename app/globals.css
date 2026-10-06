@@ -120,3 +120,42 @@ a.button{display:inline-flex}
 a.icon-button{display:inline-grid;place-items:center}
 .select-small{font:10px 'DM Sans','Noto Sans JP',sans-serif}
 button.brand-tab{border:0;background:none;width:100%;text-align:left;font-family:inherit}button.brand-tab.active{background:var(--accent-soft)}
+
+/* Accounts / HQ / Locations */
+.modal-wide{width:min(720px,100%)}
+.sidebar{overflow-y:auto}
+.goal-section{margin-bottom:18px}
+.goal-head{display:flex;align-items:baseline;gap:10px;margin:0 0 9px}
+.goal-head h2{font-size:12px;margin:0}
+.goal-head span{font-size:9px;color:var(--muted)}
+.account-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.account-card{background:#fff;border:1px solid #edf0f2;border-radius:10px;padding:15px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:9px}
+.account-card-head{display:flex;align-items:center;gap:9px}
+.account-card-head b{font-size:11px;display:block}
+.account-card-head small{font-size:9px;color:var(--muted)}
+.account-card-head .button{margin-left:auto}
+.account-meta{display:flex;flex-wrap:wrap;gap:5px}
+.goal-pill{display:inline-block;padding:3px 7px;border-radius:5px;font-size:8px;font-weight:600}
+.goal-pill.acquisition{background:#e4f1ec;color:#3f7c6c}
+.goal-pill.recruitment{background:#fbf1e8;color:#b57d4f}
+.goal-pill.branding{background:#eef0f7;color:#5d6a92}
+.loc-pill{display:inline-block;padding:3px 7px;border-radius:5px;font-size:8px;background:#f2f3f4;color:#6b737b}
+.strategy-line{font-size:9px;color:#6b737b;line-height:1.6}
+.strategy-line b{color:#3e444b;font-weight:600;margin-right:5px}
+.goal-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.goal-card{text-align:left;border:1px solid var(--line);background:#fff;border-radius:8px;padding:10px;cursor:pointer;font:inherit;color:inherit}
+.goal-card b{display:block;font-size:10px;margin-bottom:4px}
+.goal-card span{font-size:8px;color:#8a929a;line-height:1.5}
+.goal-card.selected{border-color:#8db5a7;background:#f5faf7;box-shadow:0 0 0 2px #e2f0eb}
+.check-list{display:flex;flex-wrap:wrap;gap:6px}
+.check-item{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:6px;padding:6px 9px;font-size:9px;color:#5a616a;cursor:pointer;background:#fff}
+.check-item input{margin:0}
+.result-list{margin-top:12px;display:flex;flex-direction:column;gap:8px}
+.result-item{border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:#fff}
+.result-item b{font-size:10px}
+.result-item p{font-size:9px;color:#7f8990;margin:5px 0 0;white-space:pre-wrap;line-height:1.7}
+.side-list-item{display:flex;flex-direction:column;gap:3px;width:100%;text-align:left;border:0;background:none;border-radius:6px;padding:9px 10px;cursor:pointer;font-family:inherit;color:#4e565e}
+.side-list-item b{font-size:10px;font-weight:600}
+.side-list-item small{font-size:8px;color:#9aa0a6}
+.side-list-item.active{background:var(--accent-soft);color:var(--accent-dark)}
+@media(max-width:760px){.goal-cards{grid-template-columns:1fr}.account-grid{grid-template-columns:1fr}}

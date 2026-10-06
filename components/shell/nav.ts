@@ -22,6 +22,14 @@ export const NAV_SECTIONS: { label?: string; items: NavItem[] }[] = [
       { href: "/studio", label: "Creative Studio", icon: "✧" },
     ],
   },
+  {
+    label: "本部・店舗",
+    items: [
+      { href: "/accounts", label: "アカウント戦略", icon: "◈" },
+      { href: "/hq", label: "本部テンプレート", icon: "▣" },
+      { href: "/locations", label: "店舗カスタマイズ", icon: "⌂" },
+    ],
+  },
 ];
 
 export const PAGE_TITLES: Record<string, string> = {
@@ -35,4 +43,7 @@ export const PAGE_TITLES: Record<string, string> = {
   "/chat": "AIマーケター",
   "/brand": "Brand Brain",
   "/settings": "設定",
+  "/accounts": "アカウント戦略",
+  "/hq": "本部テンプレート",
+  "/locations": "店舗カスタマイズ",
 };

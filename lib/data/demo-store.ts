@@ -4,10 +4,13 @@ import path from "node:path";
 import type {
   BrandBrain,
   ChatMessage,
+  HqCampaign,
   ID,
+  LocationProfileInput,
   Organization,
   OrganizationRole,
   Post,
+  SnsAccount,
 } from "@/lib/domain/types";
 
 /**
@@ -40,6 +43,9 @@ export interface DemoStoreData {
   brands: BrandBrain[];
   posts: Post[];
   conversations: DemoConversationRecord[];
+  accounts?: (SnsAccount & { organizationId: ID })[];
+  locationProfiles?: (LocationProfileInput & { organizationId: ID; locationId: ID })[];
+  hqCampaigns?: (HqCampaign & { organizationId: ID })[];
 }
 
 const FILE = path.join(process.cwd(), ".demo-data", "store.json");
@@ -61,9 +67,13 @@ function load(): DemoStoreData {
 
 const globalForStore = globalThis as unknown as { __naoruDemoStore?: DemoStoreData };
 
-export function getDemoStore(): DemoStoreData {
-  globalForStore.__naoruDemoStore ??= load();
-  return globalForStore.__naoruDemoStore;
+export function getDemoStore(): Required<DemoStoreData> {
+  const store = (globalForStore.__naoruDemoStore ??= load());
+  // Collections added after v1 (older persisted files don't have them).
+  store.accounts ??= [];
+  store.locationProfiles ??= [];
+  store.hqCampaigns ??= [];
+  return store as Required<DemoStoreData>;
 }
 
 export function persistDemoStore(): void {

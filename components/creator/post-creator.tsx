@@ -24,6 +24,16 @@ interface Draft {
   hashtags: string;
 }
 
+export interface CreatorAccountOption {
+  id: string;
+  label: string;
+  handle: string;
+  platform: SocialPlatform;
+  locationId: string | null;
+  tone: string;
+  persona: string;
+}
+
 export interface CreatorDefaults {
   brandHandle: string;
   locationLabel: string;
@@ -31,6 +41,11 @@ export interface CreatorDefaults {
   tones: string[];
   initialTheme: string;
   initialDate: string;
+  accounts: CreatorAccountOption[];
+  locations: { id: string; name: string }[];
+  campaigns: { id: string; name: string; theme: string }[];
+  initialAccountId: string;
+  initialCampaignId: string;
 }
 
 function toLocalInput(date: Date): string {
@@ -41,12 +56,19 @@ function toLocalInput(date: Date): string {
 export function PostCreator({ defaults }: { defaults: CreatorDefaults }) {
   const router = useRouter();
   const toast = useToast();
-  const [platform, setPlatform] = useState<SocialPlatform>("instagram");
-  const [contentType, setContentType] = useState<ContentType>("carousel");
-  const [theme, setTheme] = useState(defaults.initialTheme);
-  const [target, setTarget] = useState(defaults.targets[0] ?? "");
+  const initialAccount = defaults.accounts.find((a) => a.id === defaults.initialAccountId) ?? null;
+  const initialCampaign = defaults.campaigns.find((c) => c.id === defaults.initialCampaignId) ?? null;
+  const [accountId, setAccountId] = useState(initialAccount?.id ?? "");
+  const [locationId, setLocationId] = useState(initialAccount?.locationId ?? "");
+  const [campaignId, setCampaignId] = useState(initialCampaign?.id ?? "");
+  const [platform, setPlatform] = useState<SocialPlatform>(initialAccount?.platform ?? "instagram");
+  const [contentType, setContentType] = useState<ContentType>(
+    initialAccount && !FORMATS[initialAccount.platform].includes("carousel") ? (FORMATS[initialAccount.platform][0] ?? "feed") : "carousel",
+  );
+  const [theme, setTheme] = useState(initialCampaign?.theme ?? defaults.initialTheme);
+  const [target, setTarget] = useState(initialAccount?.persona || (defaults.targets[0] ?? ""));
   const [goal, setGoal] = useState("保存・シェア");
-  const [tone, setTone] = useState(defaults.tones[0] ?? "やさしく専門的");
+  const [tone, setTone] = useState(initialAccount?.tone || (defaults.tones[0] ?? "やさしく専門的"));
   const [notes, setNotes] = useState("");
   const [draft, setDraft] = useState<Draft | null>(null);
   const [provider, setProvider] = useState<string | null>(null);
@@ -62,6 +84,26 @@ export function PostCreator({ defaults }: { defaults: CreatorDefaults }) {
   const [generating, startGenerate] = useTransition();
   const [saving, startSave] = useTransition();
 
+  const account = defaults.accounts.find((a) => a.id === accountId) ?? null;
+
+  const changeAccount = (id: string) => {
+    setAccountId(id);
+    const next = defaults.accounts.find((a) => a.id === id);
+    if (!next) return;
+    changePlatform(next.platform);
+    setLocationId(next.locationId ?? "");
+    if (next.tone) setTone(next.tone);
+    if (next.persona) setTarget(next.persona.slice(0, 200));
+  };
+
+  const changeCampaign = (id: string) => {
+    setCampaignId(id);
+    const c = defaults.campaigns.find((x) => x.id === id);
+    if (c) setTheme(c.theme);
+  };
+
+  const scope = { accountId: accountId || null, locationId: locationId || null, hqCampaignId: campaignId || null };
+
   const changePlatform = (p: SocialPlatform) => {
     setPlatform(p);
     const allowed = FORMATS[p];
@@ -75,7 +117,7 @@ export function PostCreator({ defaults }: { defaults: CreatorDefaults }) {
     }
     setError(null);
     startGenerate(async () => {
-      const result = await generatePostAction({ platform, contentType, theme, target, goal, tone, notes });
+      const result = await generatePostAction({ platform, contentType, theme, target, goal, tone, notes }, scope);
       if (!result.ok) {
         setError(result.error);
         toast(result.error, "error");
@@ -101,6 +143,7 @@ export function PostCreator({ defaults }: { defaults: CreatorDefaults }) {
         status,
         scheduledAt: status === "scheduled" || scheduledAt ? new Date(scheduledAt).toISOString() : null,
         generationInput: { theme, target, goal, tone, notes },
+        ...scope,
       });
       if (!result.ok) {
         setError(result.error);
@@ -115,11 +158,37 @@ export function PostCreator({ defaults }: { defaults: CreatorDefaults }) {
   };
 
   const hashtags = draft?.hashtags.split(/[\s,、]+/).filter(Boolean) ?? [];
+  const handle = (account?.handle || defaults.brandHandle).replace("@", "");
+  const locationLabel = defaults.locations.find((l) => l.id === locationId)?.name ?? defaults.locationLabel;
 
   return (
     <section className="creator-layout">
       <div className="form-panel">
         <div className="panel-title" style={{ marginBottom: 17 }}>投稿の内容を設定</div>
+        {(defaults.accounts.length > 0 || defaults.campaigns.length > 0) && (
+          <div className="two-fields">
+            <Field label="投稿するアカウント" htmlFor="creatorAccount" hint="アカウント戦略（目的・柱・CTA・トーン）を反映">
+              <select id="creatorAccount" className="select" value={accountId} onChange={(e) => changeAccount(e.target.value)}>
+                <option value="">指定しない（Brand Brainのみ）</option>
+                {defaults.accounts.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
+              </select>
+            </Field>
+            <Field label="本部キャンペーン" htmlFor="creatorCampaign" optional hint="共通テーマをこの店舗向けにローカライズ">
+              <select id="creatorCampaign" className="select" value={campaignId} onChange={(e) => changeCampaign(e.target.value)}>
+                <option value="">使わない</option>
+                {defaults.campaigns.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </Field>
+          </div>
+        )}
+        {defaults.locations.length > 1 && !account?.locationId && (
+          <Field label="店舗" htmlFor="creatorLocation" optional hint="店舗カスタマイズ（エリア・スタッフ・オファー）を反映">
+            <select id="creatorLocation" className="select" value={locationId} onChange={(e) => setLocationId(e.target.value)}>
+              <option value="">指定しない</option>
+              {defaults.locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+            </select>
+          </Field>
+        )}
         <Field label="SNSプラットフォーム">
           <ChoiceChips value={platform} onChange={changePlatform}
             options={(Object.keys(FORMATS) as SocialPlatform[]).map((p) => ({ value: p, label: PLATFORM_LABELS[p] }))} />
@@ -166,10 +235,10 @@ export function PostCreator({ defaults }: { defaults: CreatorDefaults }) {
         </div>
         <div className="social-preview">
           <div className="social-header">
-            <div className="social-brand-avatar">{defaults.brandHandle.replace("@", "").slice(0, 1).toUpperCase() || "N"}</div>
+            <div className="social-brand-avatar">{handle.slice(0, 1).toUpperCase() || "N"}</div>
             <div className="social-user">
-              {defaults.brandHandle.replace("@", "") || "your_brand"}
-              <small>{defaults.locationLabel} · {PLATFORM_LABELS[platform]}</small>
+              {handle || "your_brand"}
+              <small>{locationLabel} · {PLATFORM_LABELS[platform]}</small>
             </div>
           </div>
           {platform !== "threads" && (
@@ -186,7 +255,7 @@ export function PostCreator({ defaults }: { defaults: CreatorDefaults }) {
               <div aria-busy><div className="skeleton skeleton-line" /><div className="skeleton skeleton-line" style={{ width: "70%" }} /></div>
             ) : draft ? (
               <>
-                <b>{defaults.brandHandle.replace("@", "") || "your_brand"}</b>{" "}
+                <b>{handle || "your_brand"}</b>{" "}
                 <span style={{ whiteSpace: "pre-wrap" }}>{draft.caption}</span>
                 {draft.cta && <><br /><br />{draft.cta}</>}
                 <br /><br />

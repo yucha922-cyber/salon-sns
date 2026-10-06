@@ -136,6 +136,60 @@ export type SocialAccountRow = Timestamps & {
   handle: string;
   connection_status: "manual" | "connected" | "expired" | "error";
   external_account_id: string | null;
+  is_brand_default: boolean;
+  display_name: string;
+  goal: "acquisition" | "recruitment" | "branding";
+};
+
+export type AccountStrategyRow = Timestamps & {
+  id: string;
+  organization_id: string;
+  social_account_id: string;
+  persona: string;
+  kpis: string[];
+  content_pillars: string[];
+  posts_per_week: number;
+  posting_frequency_note: string;
+  cta: string;
+  tone: string;
+};
+
+export type LocationProfileRow = Timestamps & {
+  id: string;
+  organization_id: string;
+  location_id: string;
+  area: string;
+  demographics: string;
+  featured_services: string[];
+  offers: string[];
+  local_keywords: string[];
+};
+
+export type LocationStaffRow = Timestamps & {
+  id: string;
+  organization_id: string;
+  location_id: string;
+  name: string;
+  role: string;
+  specialty: string;
+  sort_order: number;
+};
+
+export type HqCampaignRow = Timestamps & {
+  id: string;
+  organization_id: string;
+  brand_id: string | null;
+  name: string;
+  status: "draft" | "active" | "ended";
+  starts_on: string | null;
+  ends_on: string | null;
+  shared_theme: string;
+  creative_headline: string;
+  creative_body: string;
+  creative_visual: string;
+  localization_rules: string[];
+  target_location_ids: string[];
+  created_by: string | null;
 };
 
 export type PostRow = Timestamps & {
@@ -150,10 +204,12 @@ export type PostRow = Timestamps & {
   cta: string;
   hashtags: string[];
   status: PostStatusEnum;
-  source: "manual" | "ai_post_creator" | "ai_planner" | "demo";
+  source: "manual" | "ai_post_creator" | "ai_planner" | "hq_localization" | "demo";
   generation_input: Json | null;
   ai_provider: string | null;
   created_by: string | null;
+  social_account_id: string | null;
+  hq_campaign_id: string | null;
 };
 
 export type PostScheduleRow = Timestamps & {
@@ -203,6 +259,10 @@ export type Database = {
       post_schedules: Table<PostScheduleRow, "organization_id" | "post_id" | "scheduled_at">;
       ai_conversations: Table<AiConversationRow, "organization_id">;
       ai_messages: Table<AiMessageRow, "organization_id" | "conversation_id" | "role" | "content">;
+      account_strategies: Table<AccountStrategyRow, "organization_id" | "social_account_id">;
+      location_profiles: Table<LocationProfileRow, "organization_id" | "location_id">;
+      location_staff: Table<LocationStaffRow, "organization_id" | "location_id" | "name">;
+      hq_campaigns: Table<HqCampaignRow, "organization_id" | "name">;
     };
     Views: { [_ in never]: never };
     Functions: {

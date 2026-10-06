@@ -9,6 +9,7 @@ export function Modal({
   onClose,
   children,
   actions,
+  wide,
 }: {
   open: boolean;
   title: string;
@@ -16,6 +17,7 @@ export function Modal({
   onClose: () => void;
   children: ReactNode;
   actions?: ReactNode;
+  wide?: boolean;
 }) {
   useEffect(() => {
     if (!open) return;
@@ -27,7 +29,7 @@ export function Modal({
   if (!open) return null;
   return (
     <div className="modal-backdrop" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <section className="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <section className={`modal ${wide ? "modal-wide" : ""}`} role="dialog" aria-modal="true" aria-labelledby="modalTitle">
         <button className="modal-close" onClick={onClose} aria-label="閉じる">
           ×
         </button>

@@ -124,7 +124,7 @@ export type PostStatus = (typeof POST_STATUSES)[number];
 export const CONTENT_TYPES = ["feed", "carousel", "reel", "story", "text", "short_video"] as const;
 export type ContentType = (typeof CONTENT_TYPES)[number];
 
-export type PostSource = "manual" | "ai_post_creator" | "ai_planner" | "demo";
+export type PostSource = "manual" | "ai_post_creator" | "ai_planner" | "hq_localization" | "demo";
 
 export interface Post {
   id: ID;
@@ -140,6 +140,9 @@ export interface Post {
   /** ISO timestamp; null when not scheduled yet. */
   scheduledAt: string | null;
   createdAt: string;
+  accountId: ID | null;
+  locationId: ID | null;
+  hqCampaignId: ID | null;
 }
 
 export interface NewPostInput {
@@ -154,6 +157,9 @@ export interface NewPostInput {
   source: PostSource;
   generationInput?: Record<string, string>;
   aiProvider?: string;
+  accountId?: ID | null;
+  locationId?: ID | null;
+  hqCampaignId?: ID | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -210,4 +216,79 @@ export interface Recommendation {
   meta: string;
   metric: string;
   tone: "warning" | "positive";
+}
+
+// ---------------------------------------------------------------------------
+// Account strategy / HQ templates / location customization
+// ---------------------------------------------------------------------------
+
+export const ACCOUNT_GOALS = ["acquisition", "recruitment", "branding"] as const;
+export type AccountGoal = (typeof ACCOUNT_GOALS)[number];
+
+export interface AccountStrategy {
+  persona: string;
+  kpis: string[];
+  contentPillars: string[];
+  postsPerWeek: number;
+  postingFrequencyNote: string;
+  cta: string;
+  tone: string;
+}
+
+export interface SnsAccountInput {
+  platform: SocialPlatform;
+  handle: string;
+  displayName: string;
+  /** null = HQ / brand-wide account */
+  locationId: ID | null;
+  goal: AccountGoal;
+  strategy: AccountStrategy;
+}
+
+export interface SnsAccount extends SnsAccountInput {
+  id: ID;
+  /** Created from the Brand Brain "SNS" section. */
+  isBrandDefault: boolean;
+  connectionStatus: "manual" | "connected" | "expired" | "error";
+}
+
+export interface StaffMember {
+  name: string;
+  role: string;
+  specialty: string;
+}
+
+export interface LocationProfileInput {
+  area: string;
+  demographics: string;
+  featuredServices: string[];
+  staff: StaffMember[];
+  offers: string[];
+  localKeywords: string[];
+}
+
+export interface LocationProfile extends LocationProfileInput {
+  locationId: ID;
+  locationName: string;
+  address: string;
+}
+
+export const HQ_CAMPAIGN_STATUSES = ["draft", "active", "ended"] as const;
+export type HqCampaignStatus = (typeof HQ_CAMPAIGN_STATUSES)[number];
+
+export interface HqCampaignInput {
+  name: string;
+  status: HqCampaignStatus;
+  startsOn: string | null;
+  endsOn: string | null;
+  sharedTheme: string;
+  creative: { headline: string; body: string; visual: string };
+  localizationRules: string[];
+  /** empty = all locations */
+  targetLocationIds: ID[];
+}
+
+export interface HqCampaign extends HqCampaignInput {
+  id: ID;
+  createdAt: string;
 }

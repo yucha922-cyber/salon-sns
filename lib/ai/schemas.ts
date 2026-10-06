@@ -40,3 +40,14 @@ export const adAnalysisSchema = z.object({
     .max(5),
 });
 export type AdAnalysis = z.infer<typeof adAnalysisSchema>;
+
+export const accountStrategySuggestionSchema = z.object({
+  persona: z.string().max(500),
+  kpis: z.array(z.string().max(80)).min(1).max(6),
+  contentPillars: z.array(z.string().max(60)).min(2).max(6),
+  postsPerWeek: z.number().int().min(1).max(21),
+  postingFrequencyNote: z.string().max(200),
+  cta: z.string().max(200),
+  tone: z.string().max(300),
+});
+export type AccountStrategySuggestion = z.infer<typeof accountStrategySuggestionSchema>;
