@@ -2,6 +2,7 @@ import { requireAppContext } from "@/lib/auth/context";
 import { PageHeading } from "@/components/ui/page-heading";
 import { PostCreator } from "@/components/creator/post-creator";
 import { ACCOUNT_GOAL_LABELS } from "@/lib/domain/labels";
+import { jstDateKey } from "@/lib/domain/dates";
 
 export default async function CreatorPage({
   searchParams,
@@ -45,6 +46,7 @@ export default async function CreatorPage({
           tones,
           initialTheme: (params.theme ?? "").slice(0, 300) || (audience.painPoints[0] ? `${audience.painPoints[0]}を招く習慣3選` : ""),
           initialDate: date,
+          tomorrowDate: jstDateKey(new Date(Date.now() + 86_400_000)),
           accounts: accounts.map((a) => ({
             id: a.id,
             label: `${a.handle}（${locationName(a.locationId)}・${ACCOUNT_GOAL_LABELS[a.goal]}）`,

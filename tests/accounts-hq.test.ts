@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DemoRepository } from "@/lib/data/demo-repository";
+import { deterministicIds } from "@/lib/data/demo-store";
 import { RepositoryError } from "@/lib/data/repository";
 import { createDemoOrganization } from "@/lib/services/organizations";
 import { localizeCampaign, pickAccountForLocation } from "@/lib/services/localization";
@@ -41,6 +42,21 @@ const emptyCampaign = (patch: Partial<HqCampaignInput> = {}): HqCampaignInput =>
 });
 
 describe("NAORU Demo HQ", () => {
+  it("is seeded with identical ids on every server instance (deterministic seed)", async () => {
+    const seed = async () => {
+      // Simulate a fresh server instance: empty in-memory store.
+      (globalThis as { __naoruDemoStore?: unknown }).__naoruDemoStore = undefined;
+      const repo = new DemoRepository("00000000-0000-4000-8000-00000000d3e0", deterministicIds("naoru-demo-hq"));
+      const org = await createDemoOrganization(repo);
+      return { org, accounts: await repo.listAccounts(org.id), posts: await repo.listPosts(org.id) };
+    };
+    const a = await seed();
+    const b = await seed();
+    expect(a.org.id).toBe(b.org.id);
+    expect(a.accounts.map((x) => x.id).sort()).toEqual(b.accounts.map((x) => x.id).sort());
+    expect(a.posts.map((x) => x.id).sort()).toEqual(b.posts.map((x) => x.id).sort());
+  });
+
   it("has 3 locations with Instagram + Threads each, and HQ accounts", async () => {
     const { repo, org, brain } = await demo("hq-user-1");
     expect(org.name).toBe("NAORU Demo HQ");
@@ -52,7 +68,7 @@ describe("NAORU Demo HQ", () => {
       expect(platforms).toEqual(["instagram", "threads"]);
     }
     const hq = accounts.filter((a) => a.locationId === null);
-    expect(hq.map((a) => `${a.platform}:${a.goal}`).sort()).toEqual(["instagram:recruitment", "threads:branding"]);
+    expect(hq.map((a) => `${a.platform}:${a.goal}`).sort()).toEqual(["instagram:recruitment", "threads:recruitment"]);
     const handles = accounts.map((a) => `${a.platform}:${a.handle}`);
     expect(new Set(handles).size).toBe(handles.length);
     const shibuya = accounts.find((a) => a.handle === "@naoru_shibuya");
@@ -62,7 +78,14 @@ describe("NAORU Demo HQ", () => {
     const recruit = accounts.find((a) => a.handle === "@naoru_recruit");
     expect(recruit?.strategy.targetAudience).toContain("理学療法士");
     expect(recruit?.strategy.contentPillars).toContain("day_in_the_life");
-    expect((await repo.listRecommendations(org.id)).filter((r) => r.status === "pending")).toHaveLength(3);
+    expect((await repo.listRecommendations(org.id)).filter((r) => r.status === "pending")).toHaveLength(5);
+    // 10–20 planner posts this month, acquisition + recruitment
+    const posts = await repo.listPosts(org.id);
+    expect(posts.length).toBeGreaterThanOrEqual(10);
+    expect(posts.length).toBeLessThanOrEqual(20);
+    const goals = new Set(posts.map((p) => accounts.find((a) => a.id === p.accountId)?.goal));
+    expect(goals.has("acquisition") && goals.has("recruitment")).toBe(true);
+    expect(posts.some((p) => p.title === "肩こりが治らない人のNG習慣3選" && p.contentType === "reel")).toBe(true);
   });
 
   it("keeps Brand Brain handles in sync with brand-default accounts", async () => {

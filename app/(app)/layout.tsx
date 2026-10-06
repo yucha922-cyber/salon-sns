@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { requireAppContext } from "@/lib/auth/context";
 import { AppShell } from "@/components/shell/app-shell";
+import { getDataMode } from "@/lib/env";
 
 // Every page below is user/org specific: never statically cached.
 export const dynamic = "force-dynamic";
@@ -17,6 +18,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
       currentOrganizationId={current.organization.id}
       workspaceLabel={current.organization.name || primaryLocation || brain.brandName}
       analysisBadge={pendingRecommendations}
+      demoMode={getDataMode() === "demo"}
     >
       {children}
     </AppShell>

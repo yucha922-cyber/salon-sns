@@ -45,10 +45,10 @@ export async function createDemoOrganization(repo: DataRepository): Promise<Orga
     }),
   );
 
-  // Demo posts belong to the Shibuya Instagram account.
-  const shibuyaAccount = accounts.find((a) => a.locationId === locationIds[0] && a.platform === "instagram");
-  for (const post of buildDemoPosts()) {
-    await repo.createPost(organization.id, { ...post, accountId: shibuyaAccount?.id ?? null, locationId: locationIds[0] ?? null });
+  // Demo planner posts across stores and HQ accounts (acquisition + recruitment).
+  for (const { accountHandle, ...post } of buildDemoPosts()) {
+    const account = accounts.find((a) => a.handle === accountHandle);
+    await repo.createPost(organization.id, { ...post, accountId: account?.id ?? null, locationId: account?.locationId ?? null });
   }
   return organization;
 }

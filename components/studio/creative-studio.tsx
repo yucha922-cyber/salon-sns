@@ -12,7 +12,7 @@ const PREVIEW = ["p1", "p2", "p3", "p4"];
 
 export function CreativeStudio({ services, targets, defaultMessage }: { services: string[]; targets: string[]; defaultMessage: string }) {
   const toast = useToast();
-  const [objective, setObjective] = useState("新規体験予約");
+  const [objective, setObjective] = useState("集客（新規予約）");
   const [service, setService] = useState(services[0] ?? "");
   const [target, setTarget] = useState(targets[0] ?? "");
   const [message, setMessage] = useState(defaultMessage);
@@ -37,7 +37,7 @@ export function CreativeStudio({ services, targets, defaultMessage }: { services
         <div className="panel-title" style={{ marginBottom: 15 }}>広告の条件</div>
         <Field label="広告の目的" htmlFor="objective">
           <select id="objective" className="select" value={objective} onChange={(e) => setObjective(e.target.value)}>
-            {["新規体験予約", "認知拡大", "リピート促進"].map((o) => <option key={o}>{o}</option>)}
+            {["集客（新規予約）", "認知拡大", "リピート促進", "採用"].map((o) => <option key={o}>{o}</option>)}
           </select>
         </Field>
         <Field label="商品・サービス" htmlFor="service">
@@ -48,16 +48,16 @@ export function CreativeStudio({ services, targets, defaultMessage }: { services
           <input id="studioTarget" className="input" list="studioTargets" value={target} onChange={(e) => setTarget(e.target.value)} />
           <datalist id="studioTargets">{targets.map((s) => <option key={s} value={s} />)}</datalist>
         </Field>
-        <Field label="悩み・訴求したいこと" htmlFor="message">
+        <Field label="悩み" htmlFor="message">
           <textarea id="message" className="textarea" value={message} onChange={(e) => setMessage(e.target.value)} />
         </Field>
         <Field label="配置・フォーマット" htmlFor="placement">
           <select id="placement" className="select" value={placement} onChange={(e) => setPlacement(e.target.value)}>
-            {["Instagram Reel · 縦型動画 9:16", "Instagram Feed · 正方形画像 1:1", "Facebook · 横型画像 1.91:1"].map((p) => <option key={p}>{p}</option>)}
+            {["Instagram Reel · 縦型動画 9:16", "Instagram Feed · 正方形画像 1:1", "Instagram Story · 9:16", "Facebook · 横型画像 1.91:1"].map((p) => <option key={p}>{p}</option>)}
           </select>
         </Field>
         <button className="button primary" style={{ width: "100%", justifyContent: "center" }} onClick={generate} disabled={pending}>
-          {pending ? <><Spinner /> 提案を作成中…</> : "✳ コンセプトを提案"}
+          {pending ? <><Spinner /> 企画中…</> : "✳ AIに企画させる"}
         </button>
       </div>
       <div>

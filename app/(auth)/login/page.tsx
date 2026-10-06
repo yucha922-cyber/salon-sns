@@ -17,7 +17,7 @@ export default function LoginPage() {
       </Suspense>
       {demoMode && (
         <p className="mode-note">
-          Demoモードで起動中（Supabase未設定）。データはこのサーバー内にのみ保存されます。
+          Demo Mode で起動中です。Supabase・AI APIに接続せず、モックデータで全画面を確認できます（データはサーバー再起動で初期状態に戻ります）。
         </p>
       )}
     </section>
