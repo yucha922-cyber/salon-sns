@@ -86,6 +86,79 @@ export const DEMO_BRAND_BRAIN: BrandBrainInput = {
  */
 export type DemoPost = NewPostInput & { accountHandle: string };
 
+/** Content pillar for demo posts (drives pillar performance & Marketing Memory). */
+function demoPillar(handle: string, contentType: NewPostInput["contentType"], title: string): string {
+  if (handle === "@naoru_recruit" || handle === "@naoru_careers") {
+    if (contentType === "staff" || title.includes("インタビュー")) return "employee_voice";
+    if (title.includes("研修") || title.includes("技術")) return "training";
+    if (title.includes("1日")) return "day_in_the_life";
+    return "career";
+  }
+  if (/セルフケア|ストレッチ|How-to|やり方/.test(title)) return "selfcare";
+  if (/NG|原因|理由|チェック/.test(title)) return "problem_awareness";
+  const byType: Partial<Record<NewPostInput["contentType"], string>> = {
+    before_after: "before_after",
+    testimonial: "testimonial",
+    staff: "staff_expertise",
+    offer: "offer",
+    feed: "faq",
+    carousel: "education",
+    educational: "education",
+    threads_text: "education",
+    reel: "education",
+  };
+  return byType[contentType] ?? "education";
+}
+
+function withPillar(post: DemoPost): DemoPost {
+  return { ...post, planning: { ...post.planning, contentPillar: demoPillar(post.accountHandle, post.contentType, post.title) } };
+}
+
+/**
+ * Published history (last ~6 weeks) so the Measure → Analyze → Learn part of
+ * the loop has data on day one. Relative to `now`, so it never goes stale.
+ */
+export function buildDemoHistoryPosts(now: Date = new Date()): DemoPost[] {
+  const ago = (days: number, hourJst: number): string => {
+    const key = jstDateKey(new Date(now.getTime() - days * 86_400_000));
+    const [y, m, d] = key.split("-").map(Number) as [number, number, number];
+    return new Date(Date.UTC(y, m - 1, d, hourJst - 9, 0)).toISOString();
+  };
+  const h = (
+    accountHandle: string,
+    platform: NewPostInput["platform"],
+    contentType: NewPostInput["contentType"],
+    days: number,
+    hour: number,
+    title: string,
+    caption: string,
+    cta: string,
+    hashtags: string[],
+  ): DemoPost => withPillar({ accountHandle, platform, contentType, title, caption, cta, hashtags, status: "published", scheduledAt: ago(days, hour), source: "demo" });
+  return [
+    h("@naoru_shibuya", "instagram", "reel", 9, 20, "1分でできる肩こりストレッチ（How-to）", "座ったままできる肩こりセルフケアのやり方を3ステップで。仕事の合間に試してみてください。", "保存して毎日の習慣に", ["#渋谷整体", "#肩こり", "#セルフケア"]),
+    h("@naoru_shibuya", "instagram", "before_after", 13, 20, "姿勢Before/After：猫背の変化（許諾済み）", "AI姿勢分析で比べた施術前後の姿勢です。※効果には個人差があります。", "初回姿勢チェックはLINEから", ["#渋谷整体", "#姿勢分析"]),
+    h("@naoru_shibuya", "instagram", "reel", 17, 20, "デスクワーク中の首こりチェック3選", "その姿勢、首に負担がかかっていませんか？30秒でできるセルフチェックのやり方を紹介します。", "保存して試してみてください", ["#渋谷整体", "#首こり", "#デスクワーク"]),
+    h("@naoru_shibuya", "instagram", "testimonial", 21, 20, "お客様の声「仕事帰りに通える」（許諾済み）", "渋谷駅から近いので、仕事帰りに寄れるのが続けられる理由です。（30代・会社員）", "ご予約はプロフィールのLINEから", ["#渋谷整体", "#口コミ"]),
+    h("@naoru_shibuya", "instagram", "before_after", 27, 20, "反り腰Before/After（許諾済み）", "反り腰が気になるお客様の施術前後を姿勢分析で比較しました。※効果には個人差があります。", "初回姿勢チェックはLINEから", ["#渋谷整体", "#反り腰"]),
+    h("@naoru_shibuya", "instagram", "carousel", 33, 20, "肩こりを悪化させるNG習慣とやり方の見直し", "スマホ・PC・寝る姿勢。肩こりを悪化させるNG習慣と、今日からできる見直し方法。", "保存して見返してください", ["#渋谷整体", "#肩こり"]),
+    h("@naoru_shibuya_threads", "threads", "threads_text", 11, 12, "肩こりは「揉む」より「姿勢」から", "肩こりは揉んでも戻ります。まずは画面の高さを目線に合わせるだけでも変わります。", "プロフィールのLINEから相談できます", ["#肩こり"]),
+    h("@naoru_shibuya_threads", "threads", "threads_text", 24, 12, "今日の渋谷院の空き状況", "本日19時以降、少しだけ空きがあります。仕事帰りにどうぞ。", "プロフィールから予約", ["#渋谷整体"]),
+    h("@naoru_ikebukuro", "instagram", "educational", 12, 19, "腰痛セルフケアのやり方（昼休み編）", "池袋で働く会社員向け。昼休みにできる腰のストレッチ方法を紹介します。", "昼休み30分コースはプロフィールから", ["#池袋整体", "#腰痛"]),
+    h("@naoru_ikebukuro", "instagram", "staff", 19, 19, "スタッフ紹介：腰痛専門の鈴木", "池袋院の鈴木は腰痛・坐骨神経の施術が得意な柔道整復師です。", "ご予約はプロフィールから", ["#池袋整体", "#スタッフ紹介"]),
+    h("@naoru_ikebukuro", "instagram", "offer", 26, 19, "昼休み30分コースのご案内", "池袋駅から徒歩3分。昼休みの30分で体を整えられます。", "ご予約はプロフィールから", ["#池袋整体"]),
+    h("@naoru_yokohama", "instagram", "reel", 8, 10, "産後の骨盤ケア：自宅でできるストレッチ方法", "子育て中でもできる、骨盤まわりのセルフケアのやり方を紹介します。", "保存してあとで見返してください", ["#横浜整体", "#産後骨盤矯正横浜", "#セルフケア"]),
+    h("@naoru_yokohama", "instagram", "testimonial", 16, 10, "お客様の声「キッズスペースが助かる」（許諾済み）", "子どもを連れて通えるのがありがたいです。（30代・横浜市在住）", "ご予約はお電話・LINEで", ["#横浜整体"]),
+    h("@naoru_yokohama", "instagram", "feed", 23, 10, "横浜院の駐車場のご案内", "横浜院には提携駐車場があります。お車でもお気軽にどうぞ。", "アクセスはプロフィールから", ["#横浜整体"]),
+    h("@naoru_recruit", "instagram", "reel", 10, 21, "新人セラピストの研修1ヶ月目", "研修1ヶ月目の新人スタッフに密着。技術チェックの様子を紹介します。", "見学・カジュアル面談はDMから", ["#セラピスト求人", "#整体師募集"]),
+    h("@naoru_recruit", "instagram", "staff", 18, 21, "社員インタビュー：理学療法士から整体へ", "病院勤務の理学療法士が、NAORUを選んだ理由を話してくれました。", "採用ページはプロフィールから", ["#理学療法士", "#転職"]),
+    h("@naoru_recruit", "instagram", "carousel", 29, 21, "NAORUのキャリアパス", "セラピスト→教育担当→院長。それぞれのステップで求められることをまとめました。", "採用ページはプロフィールから", ["#セラピスト求人"]),
+    h("@naoru_careers", "threads", "threads_text", 14, 21, "整体師の仕事でいちばん嬉しい瞬間", "「体が軽くなった」と笑顔で帰っていくお客様を見送るとき。それがこの仕事の一番の魅力です。", "気になったらDMで気軽に質問を", ["#整体師"]),
+    h("@naoru_careers", "threads", "threads_text", 25, 21, "見学会を開催します", "渋谷院で現場見学会を開催します。理学療法士・柔道整復師の方、歓迎です。", "DMで参加希望をお送りください", ["#理学療法士"]),
+    h("@naoru_ikebukuro_threads", "threads", "threads_text", 15, 12, "池袋で働く人の腰痛あるある", "午後になると腰が重くなる。池袋のオフィスワーカーに多いお悩みです。", "プロフィールから予約", ["#池袋整体"]),
+  ];
+}
+
 export function buildDemoPosts(now: Date = new Date()): DemoPost[] {
   const [y, m, today] = jstDateKey(now).split("-").map(Number) as [number, number, number];
   const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
@@ -104,7 +177,7 @@ export function buildDemoPosts(now: Date = new Date()): DemoPost[] {
     cta: string,
     hashtags: string[],
     draft = false,
-  ): DemoPost => ({ accountHandle, platform, contentType, title, caption, cta, hashtags, status: statusFor(day, draft), scheduledAt: at(day, hour), source: "demo" });
+  ): DemoPost => withPillar({ accountHandle, platform, contentType, title, caption, cta, hashtags, status: statusFor(day, draft), scheduledAt: at(day, hour), source: "demo" });
 
   return [
     p("@naoru_shibuya", "instagram", "reel", 2, 20, "肩こりが治らない人のNG習慣3選", "マッサージしても肩こりが戻るのは、毎日の習慣が原因かもしれません。デスクワーク中にやりがちなNG習慣を3つ紹介します。", "保存して、あとで見返してくださいね", ["#渋谷整体", "#肩こり", "#デスクワーク"]),

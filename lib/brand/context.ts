@@ -5,6 +5,7 @@
  * AI always sees the same, complete, consistently ordered picture.
  */
 import type { BrandBrainInput, HqCampaign, KpiTarget, LocationProfile, SnsAccount } from "@/lib/domain/types";
+import type { ContentLearning } from "@/lib/social/types";
 import { goalLabel, PLATFORM_LABELS, WEEKDAY_LABELS } from "@/lib/domain/labels";
 import { pillarLabel } from "./content-pillars";
 import { findIndustryPreset } from "./industries";
@@ -172,6 +173,22 @@ export interface MarketingScope {
   account?: SnsAccount | null;
   location?: LocationProfile | null;
   campaign?: HqCampaign | null;
+  /** Marketing Memory: what real operations taught us (content_learnings). */
+  memory?: ContentLearning[];
+}
+
+/**
+ * Marketing Memory block. Brand Brain = what we know about the company;
+ * Marketing Memory = what we learned from real metrics. Learnings are
+ * evidence-weighted hints, never rules that override Brand Brain facts.
+ */
+export function formatMarketingMemory(memory: ContentLearning[] | undefined): string {
+  if (!memory?.length) return "";
+  return [
+    "## Marketing Memory（実際の運用データから学んだこと）",
+    "- 確度（confidence）が高い学びほど企画に優先的に反映する。Brand Brainの事実と矛盾する場合はBrand Brainを優先し、低確度の学びは検証として扱う。",
+    ...memory.slice(0, 8).map((l) => `- ${l.learning}（確度${Math.round(l.confidence * 100)}%${l.contentPillar ? ` / 柱:${l.contentPillar}` : ""}）`),
+  ].join("\n");
 }
 
 export function formatKpis(kpis: KpiTarget[]): string {
@@ -235,6 +252,8 @@ export function formatScopeContext(scope: MarketingScope): string {
       "",
     );
   }
+  const memory = formatMarketingMemory(scope.memory);
+  if (memory) lines.push(memory, "");
   return lines.join("\n").trim();
 }
 

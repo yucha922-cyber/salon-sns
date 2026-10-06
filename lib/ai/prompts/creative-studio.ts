@@ -1,4 +1,6 @@
 import type { BrandBrainInput } from "@/lib/domain/types";
+import type { ContentLearning } from "@/lib/social/types";
+import { formatMarketingMemory } from "@/lib/brand/context";
 import type { GenerateObjectRequest } from "../provider";
 import { creativeConceptsSchema, type CreativeConcepts } from "../schemas";
 import { brandSystemBlock, first, quoteUserInput, SAFETY_RULES } from "./shared";
@@ -14,6 +16,7 @@ export interface CreativeBrief {
 export function buildCreativeStudioRequest(
   brain: BrandBrainInput,
   brief: CreativeBrief,
+  memory: ContentLearning[] = [],
 ): GenerateObjectRequest<CreativeConcepts> {
   const { ctx, text } = brandSystemBlock(brain);
   const system = [
@@ -24,6 +27,7 @@ export function buildCreativeStudioRequest(
     SAFETY_RULES,
     "",
     text,
+    memory.length ? `\n${formatMarketingMemory(memory)}\n- 実績で反応の良かった切り口を優先し、rationaleに根拠となる学びを書く。` : "",
   ].join("\n");
   const prompt = [
     quoteUserInput("objective", brief.objective),

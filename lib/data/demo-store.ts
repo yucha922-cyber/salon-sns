@@ -16,6 +16,18 @@ import type {
   PlanProposal,
   Recommendation,
 } from "@/lib/domain/types";
+import { EMPTY_PUBLISHING } from "@/lib/domain/types";
+import { emptyConnection } from "@/lib/social/connection";
+import type {
+  AccountCandidate,
+  ContentLearning,
+  MediaAsset,
+  MetricSnapshot,
+  PerformanceReview,
+  PublishJob,
+  PublishablePlatform,
+  SocialEvent,
+} from "@/lib/social/types";
 
 /**
  * In-memory data store used when Supabase is not configured.
@@ -43,7 +55,7 @@ export interface DemoStoreData {
   version: 1;
   users: DemoUserRecord[];
   organizations: Organization[];
-  members: { organizationId: ID; userId: ID; role: OrganizationRole }[];
+  members: { organizationId: ID; userId: ID; role: OrganizationRole; locationIds?: ID[] | null }[];
   brands: BrandBrain[];
   posts: Post[];
   conversations: DemoConversationRecord[];
@@ -53,6 +65,45 @@ export interface DemoStoreData {
   contentPillars?: (ContentPillar & { organizationId: ID })[];
   planProposals?: (PlanProposal & { organizationId: ID })[];
   recommendations?: Recommendation[];
+  social?: DemoSocialData;
+}
+
+/** Publishing-loop collections (see lib/social/demo-store.ts). */
+export interface DemoSocialData {
+  credentials: {
+    organizationId: ID;
+    socialAccountId: ID;
+    provider: PublishablePlatform;
+    externalAccountId: string;
+    ciphertext: string;
+    tokenExpiresAt: string | null;
+    scopes: string[];
+    lastRefreshedAt: string | null;
+    refreshFailures: number;
+    createdAt: string;
+  }[];
+  pending: {
+    id: ID;
+    organizationId: ID;
+    userId: ID;
+    provider: PublishablePlatform;
+    candidates: AccountCandidate[];
+    ciphertext: string;
+    tokenExpiresAt: string | null;
+    scopes: string[];
+    expiresAt: string;
+    consumedAt: string | null;
+  }[];
+  media: MediaAsset[];
+  jobs: PublishJob[];
+  snapshots: MetricSnapshot[];
+  reviews: PerformanceReview[];
+  learnings: ContentLearning[];
+  events: SocialEvent[];
+}
+
+export function emptySocial(): DemoSocialData {
+  return { credentials: [], pending: [], media: [], jobs: [], snapshots: [], reviews: [], learnings: [], events: [] };
 }
 
 const FILE = path.join(process.cwd(), ".demo-data", "store.json");
@@ -83,6 +134,11 @@ export function getDemoStore(): Required<DemoStoreData> {
   store.contentPillars ??= [];
   store.planProposals ??= [];
   store.recommendations ??= [];
+  store.social ??= emptySocial();
+  // Records persisted before the publishing loop existed.
+  for (const post of store.posts) post.publishing ??= { ...EMPTY_PUBLISHING };
+  for (const account of store.accounts) account.connection ??= emptyConnection();
+  for (const org of store.organizations) org.timezone ??= "Asia/Tokyo";
   return store as Required<DemoStoreData>;
 }
 

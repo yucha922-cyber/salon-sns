@@ -4,7 +4,9 @@ import { updateSupabaseSession } from "@/lib/supabase/middleware";
 
 // Kept in sync with lib/auth/demo-session.ts (middleware can't import server-only modules).
 const DEMO_SESSION_COOKIE = "naoru_demo_session";
-const PUBLIC_PATHS = ["/login", "/signup", "/auth"];
+// Machine endpoints authenticate themselves (cron secret, Meta signatures,
+// signed media tokens) and must be reachable without a browser session.
+const PUBLIC_PATHS = ["/login", "/signup", "/auth", "/api/cron", "/api/webhooks", "/api/social/meta", "/api/media/demo", "/social/data-deletion"];
 
 /**
  * Route protection. Unauthenticated users are redirected to /login.
@@ -25,6 +27,7 @@ export async function middleware(request: NextRequest) {
   }
 
   if (!isAuthenticated && !isPublic) {
+    if (pathname.startsWith("/api/")) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.search = pathname === "/" ? "" : `?next=${encodeURIComponent(pathname + search)}`;

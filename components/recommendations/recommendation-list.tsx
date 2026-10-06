@@ -32,7 +32,7 @@ export function RecommendationList({
     startTransition(async () => {
       const result = await setRecommendationStatusAction({ id, status });
       if (!result.ok) return toast(result.error, "error");
-      toast(`「${result.data.title.slice(0, 20)}…」を${RECOMMENDATION_STATUS_LABELS[status]}にしました`);
+      toast(`「${result.data.title.slice(0, 20)}…」を${RECOMMENDATION_STATUS_LABELS[status]}にしました${status === "approved" && result.data.socialAccountId ? "（SNS Plannerに下書きを追加）" : ""}`);
       router.refresh();
     });
 
@@ -73,6 +73,7 @@ export function RecommendationList({
               <h4>
                 <span className={`sev ${r.severity}`}>重要度 {SEVERITY_LABELS[r.severity]}</span>
                 <span className="loc-pill" style={{ marginRight: 5 }}>{RECOMMENDATION_CATEGORY_LABELS[r.category]}</span>
+                {r.source === "performance" && <span className="loc-pill" style={{ marginRight: 5 }} title="Instagram / Threads の実績データ（Insights）から作成">実績データ</span>}
                 {r.title}
               </h4>
               {!compact && (
@@ -92,7 +93,9 @@ export function RecommendationList({
               <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
                 {r.status === "pending" && (
                   <>
-                    <button className="button small primary" onClick={() => setStatus(r.id, "approved")} disabled={pending} aria-label={`${r.title}を承認`}>承認</button>
+                    <button className="button small primary" onClick={() => setStatus(r.id, "approved")} disabled={pending} aria-label={`${r.title}を承認`} title={r.socialAccountId ? "承認するとSNS Plannerに下書きとして追加されます" : undefined}>
+                      {r.socialAccountId ? "承認してPlannerへ" : "承認"}
+                    </button>
                     <button className="button small" onClick={() => setStatus(r.id, "rejected")} disabled={pending} aria-label={`${r.title}を却下`}>却下</button>
                   </>
                 )}

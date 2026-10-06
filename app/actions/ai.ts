@@ -13,7 +13,8 @@ import { buildCreativeStudioRequest } from "@/lib/ai/prompts/creative-studio";
 import { buildAdAnalysisRequest } from "@/lib/ai/prompts/ad-analysis";
 import type { AdAnalysis, CreativeConcepts, PostDraft } from "@/lib/ai/schemas";
 import { getCampaigns } from "@/lib/services/analytics";
-import { formatPortfolioContext } from "@/lib/brand/context";
+import { formatMarketingMemory, formatPortfolioContext } from "@/lib/brand/context";
+import { loadMarketingMemory } from "@/lib/social/memory";
 import { findLocation } from "@/lib/services/localization";
 import { toUserMessage } from "@/lib/services/errors";
 
@@ -25,7 +26,8 @@ export async function sendChatMessageAction(
   const parsed = chatMessageSchema.safeParse(input);
   if (!parsed.success) return validationError(parsed.error);
   try {
-    const { repo, current, brain } = await requireAppContext();
+    const app = await requireAppContext();
+    const { repo, current, brain } = app;
     const orgId = current.organization.id;
     let conversation = parsed.data.conversationId
       ? await repo.getConversation(orgId, parsed.data.conversationId)
@@ -39,10 +41,10 @@ export async function sendChatMessageAction(
       .slice(-MAX_HISTORY)
       .map(({ role, content }) => ({ role, content }));
 
-    const [accounts, locations] = await Promise.all([repo.listAccounts(orgId), repo.listLocationProfiles(orgId)]);
+    const [accounts, locations, memory] = await Promise.all([repo.listAccounts(orgId), repo.listLocationProfiles(orgId), loadMarketingMemory(app)]);
     const provider = getAIProvider();
     const { text } = await provider.generateText(
-      buildMarketingChatRequest(brain, history, formatPortfolioContext(accounts, locations)),
+      buildMarketingChatRequest(brain, history, [formatPortfolioContext(accounts, locations), formatMarketingMemory(memory)].filter(Boolean).join("\n\n"), memory),
     );
     const reply = await repo.appendMessage(orgId, conversation.id, {
       role: "assistant",
@@ -71,7 +73,8 @@ export async function generatePostAction(
   const scopeIds = postScopeSchema.safeParse(scopeInput);
   if (!scopeIds.success) return validationError(scopeIds.error);
   try {
-    const { brain, repo, current } = await requireAppContext();
+    const app = await requireAppContext();
+    const { brain, repo, current } = app;
     const orgId = current.organization.id;
     // Resolve ids only within the current organization.
     const [accounts, locations, campaigns] = await Promise.all([
@@ -82,9 +85,10 @@ export async function generatePostAction(
     const account = accounts.find((a) => a.id === scopeIds.data.accountId) ?? null;
     const location = findLocation(locations, scopeIds.data.locationId ?? account?.locationId);
     const campaign = campaigns.find((c) => c.id === scopeIds.data.hqCampaignId) ?? null;
+    const memory = await loadMarketingMemory(app, { accountId: account?.id, locationId: location?.locationId ?? account?.locationId, platform: parsed.data.platform });
     const provider = getAIProvider();
     const { object } = await provider.generateStructuredObject(
-      buildPostCreatorRequest(brain, parsed.data, { account, location, campaign }),
+      buildPostCreatorRequest(brain, parsed.data, { account, location, campaign, memory }),
     );
     return { ok: true, data: { draft: object, provider: provider.name } };
   } catch (error) {
@@ -106,9 +110,10 @@ export async function generateCreativeConceptsAction(
   const parsed = creativeBriefSchema.safeParse(input);
   if (!parsed.success) return validationError(parsed.error);
   try {
-    const { brain } = await requireAppContext();
+    const app = await requireAppContext();
+    const memory = await loadMarketingMemory(app);
     const provider = getAIProvider();
-    const { object } = await provider.generateStructuredObject(buildCreativeStudioRequest(brain, parsed.data));
+    const { object } = await provider.generateStructuredObject(buildCreativeStudioRequest(app.brain, parsed.data, memory));
     return { ok: true, data: { concepts: object.concepts, provider: provider.name } };
   } catch (error) {
     return { ok: false, error: toUserMessage(error, "コンセプトの生成に失敗しました") };

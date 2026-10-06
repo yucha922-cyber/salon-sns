@@ -78,9 +78,14 @@ describe("NAORU Demo HQ", () => {
     const recruit = accounts.find((a) => a.handle === "@naoru_recruit");
     expect(recruit?.strategy.targetAudience).toContain("理学療法士");
     expect(recruit?.strategy.contentPillars).toContain("day_in_the_life");
-    expect((await repo.listRecommendations(org.id)).filter((r) => r.status === "pending")).toHaveLength(5);
-    // 10–20 planner posts this month, acquisition + recruitment
-    const posts = await repo.listPosts(org.id);
+    const pending = (await repo.listRecommendations(org.id)).filter((r) => r.status === "pending");
+    expect(pending.filter((r) => r.source === "operations")).toHaveLength(5);
+    // Recommendations derived from (mock) insights are added on top.
+    expect(pending.some((r) => r.source === "performance")).toBe(true);
+    // 10–20 planner posts this month, acquisition + recruitment (history lives in earlier months)
+    const month = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit" }).format(new Date());
+    const thisMonth = (iso: string | null) => !!iso && new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit" }).format(new Date(iso)) === month;
+    const posts = (await repo.listPosts(org.id)).filter((p) => thisMonth(p.scheduledAt));
     expect(posts.length).toBeGreaterThanOrEqual(10);
     expect(posts.length).toBeLessThanOrEqual(20);
     const goals = new Set(posts.map((p) => accounts.find((a) => a.id === p.accountId)?.goal));

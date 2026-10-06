@@ -103,7 +103,8 @@ export const savePostSchema = z.object({
   caption: text(2200),
   cta: text(200),
   hashtags: z.array(z.string().trim().max(60)).max(30),
-  status: z.enum(POST_STATUSES),
+  // Approval / queue states are reached only through the publishing flow.
+  status: z.enum(["draft", "scheduled"]),
   scheduledAt: z.string().datetime({ offset: true }).nullable(),
   generationInput: z.record(z.string(), z.string().max(500)).optional(),
   hook: text(200).optional(),
@@ -119,8 +120,10 @@ export const updatePostSchema = z.object({
   caption: text(2200),
   cta: text(200).optional(),
   hashtags: z.array(z.string().trim().max(60)).max(30).optional(),
+  // Non-editable states (approved / queued …) may only be echoed back unchanged.
   status: z.enum(POST_STATUSES),
   scheduledAt: z.string().datetime({ offset: true }).nullable(),
+  accountId: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/).nullable().optional(),
 });
 
 export const chatMessageSchema = z.object({
