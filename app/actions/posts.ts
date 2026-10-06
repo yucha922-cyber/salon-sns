@@ -26,6 +26,7 @@ export async function savePostAction(input: unknown): Promise<ActionResult<Post>
       accountId: data.accountId ?? null,
       locationId: data.locationId ?? null,
       hqCampaignId: data.hqCampaignId ?? null,
+      planning: { hook: data.hook ?? "", theme: data.generationInput?.theme ?? "" },
     });
     revalidatePath("/planner");
     revalidatePath("/posts");

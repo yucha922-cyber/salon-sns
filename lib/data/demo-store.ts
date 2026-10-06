@@ -1,6 +1,7 @@
 import "server-only";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { createHash } from "node:crypto";
 import type {
   BrandBrain,
   ChatMessage,
@@ -97,4 +98,17 @@ export function persistDemoStore(): void {
 
 export function newId(): ID {
   return crypto.randomUUID();
+}
+
+/**
+ * Deterministic UUID generator for the shared demo seed. Every server instance
+ * (e.g. each serverless cold start) rebuilds the demo with the same ids, so
+ * cookies and URLs created on one instance stay valid on another.
+ */
+export function deterministicIds(namespace: string): () => ID {
+  let n = 0;
+  return () => {
+    const hex = createHash("sha1").update(`${namespace}:${n++}`).digest("hex");
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-5${hex.slice(13, 16)}-a${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
+  };
 }

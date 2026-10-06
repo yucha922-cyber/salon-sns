@@ -4,6 +4,7 @@ import { CONTENT_TYPES } from "@/lib/domain/types";
 
 export const postDraftSchema = z.object({
   title: z.string().min(1).max(200),
+  hook: z.string().max(200),
   caption: z.string().min(1).max(2200),
   cta: z.string().max(200),
   hashtags: z.array(z.string().max(60)).max(30),

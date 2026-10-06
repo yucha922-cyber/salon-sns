@@ -15,6 +15,7 @@ export interface ShellProps {
   currentOrganizationId: string;
   workspaceLabel: string;
   analysisBadge: number;
+  demoMode?: boolean;
   children: ReactNode;
 }
 
@@ -203,6 +204,11 @@ export function AppShell(props: ShellProps) {
             <b>{PAGE_TITLES[section] ?? ""}</b>
           </div>
           <div className="top-actions">
+            {props.demoMode && (
+              <span className="demo-mode-pill" title="Supabase・AI APIに接続せず、モックデータで動作しています。データはサーバー再起動で初期状態に戻ります。">
+                Demo Mode
+              </span>
+            )}
             <span className="date-label">{today}</span>
             <Link className="icon-button" aria-label="AIマーケターに相談" href="/chat">
               ✳

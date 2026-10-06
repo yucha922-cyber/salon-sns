@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 import type { AppUser } from "@/lib/domain/types";
 import { getDataMode, getSiteUrl } from "@/lib/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { getDemoStore, newId, persistDemoStore } from "@/lib/data/demo-store";
+import { deterministicIds, getDemoStore, newId, persistDemoStore } from "@/lib/data/demo-store";
 import { DemoRepository } from "@/lib/data/demo-repository";
 import { SupabaseRepository } from "@/lib/data/supabase-repository";
 import type { DataRepository } from "@/lib/data/repository";
@@ -33,13 +33,15 @@ export type AuthResult =
 // ---------------------------------------------------------------------------
 
 let demoSeedPromise: Promise<void> | null = null;
+const DEMO_USER_ID = "00000000-0000-4000-8000-00000000d3e0";
 
 /** Seeds the shared demo account (demo@naoru.jp) with the NAORU demo org once. */
 function ensureDemoAccount(): Promise<void> {
   demoSeedPromise ??= (async () => {
     const store = getDemoStore();
     if (store.users.some((u) => u.email === DEMO_ACCOUNT.email)) return;
-    const id = newId();
+    // Fixed ids: the demo login cookie stays valid on every server instance.
+    const id = DEMO_USER_ID;
     store.users.push({
       id,
       email: DEMO_ACCOUNT.email,
@@ -47,7 +49,7 @@ function ensureDemoAccount(): Promise<void> {
       passwordHash: hashPassword(DEMO_ACCOUNT.password),
     });
     persistDemoStore();
-    await createDemoOrganization(new DemoRepository(id));
+    await createDemoOrganization(new DemoRepository(id, deterministicIds("naoru-demo-hq")));
   })();
   return demoSeedPromise;
 }

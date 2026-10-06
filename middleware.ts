@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { getSupabasePublicConfig } from "@/lib/env";
+import { getDataMode, getSupabasePublicConfig } from "@/lib/env";
 import { updateSupabaseSession } from "@/lib/supabase/middleware";
 
 // Kept in sync with lib/auth/demo-session.ts (middleware can't import server-only modules).
@@ -15,7 +15,7 @@ export async function middleware(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
   const isPublic = PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 
-  const config = getSupabasePublicConfig();
+  const config = getDataMode() === "supabase" ? getSupabasePublicConfig() : null;
   let response = NextResponse.next({ request });
   let isAuthenticated: boolean;
   if (config) {

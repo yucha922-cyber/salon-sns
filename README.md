@@ -186,6 +186,7 @@ lib/services/planning.ts  提案 → 承認/却下/編集/再生成 → 承認�
 | 変数 | 用途 |
 |---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` | 設定するとSupabaseモード。未設定ならDemoモード |
+| `NEXT_PUBLIC_DEMO_MODE` | `true` でSupabase設定に関わらず強制Demoモード（Preview確認用）。本番は未設定 |
 | `NEXT_PUBLIC_SITE_URL` | メール確認リンクの戻り先 |
 | `DEMO_SESSION_SECRET` | Demoモードのセッション署名（16文字以上） |
 | `AI_PROVIDER` | `anthropic` / `openai` / `mock` |
@@ -218,8 +219,19 @@ cat supabase/tests/auth_stub.sql supabase/migrations/*.sql supabase/tests/rls_te
 ## Demo mode
 
 - Supabase未設定時は **Demoモード**：サーバー内メモリ（開発時は `.demo-data/store.json` に保存）＋署名付きCookie認証。全フローが動作します。
-- デモ組織 **NAORU Demo HQ**：渋谷院・池袋院・横浜院の3店舗。各店舗に Instagram + Threads（渋谷院Instagram＝集客／30代女性・渋谷勤務・デスクワーク、横浜院Threads＝リピート）、本部に採用Instagram（20〜30代 PT・柔道整復師・セラピスト）とブランドThreads。店舗カスタマイズ、今月の本部テーマ「デスクワーク×姿勢改善」、承認待ちのAI Recommendationも入っています。
-- ログイン画面の「デモアカウントで試す」で、デモ組織 **NAORU整体 渋谷院**（整体 / Healthcare / Wellness、30代女性・渋谷勤務のデスクワーカー、肩こり・首こり・姿勢・仕事終わりの疲れ、清潔感・専門性・都会的・親しみやすい）にすぐ入れます。
+- デモ組織 **NAORU Demo HQ**：渋谷院・池袋院・横浜院の3店舗。各店舗に Instagram + Threads（渋谷院Instagram＝集客／30代女性・渋谷勤務・デスクワーク、横浜院Threads＝リピート）、本部に採用Instagram（20〜30代 PT・柔道整復師・セラピスト）と採用Threads（@naoru_careers）。今月の投稿18本（集客・採用の両方）、店舗カスタマイズ、今月の本部テーマ「デスクワーク×姿勢改善」、承認待ちのAI Recommendationも入っています。
+- ログイン画面の「✳ Demoで試す（NAORU Demo HQ）」で、デモ組織 **NAORU Demo HQ**（渋谷院・池袋院・横浜院／整体 / Healthcare / Wellness、30代女性・渋谷勤務・デスクワーク、肩こり・首こり・姿勢・疲労、AI姿勢分析・国家資格者・原因分析・清潔感、専門的・親しみやすい・都会的・清潔感）にすぐ入れます。Demo中は上部バーに「Demo Mode」と表示されます。
+- Demoのユーザー・組織IDは決定的に生成されるため、サーバー再起動やサーバーレスの別インスタンスでもログイン状態・URLが有効です。ただし **Demo中に追加・編集したデータはインスタンスのメモリ上のみ** で、再起動（コールドスタート）で初期状態に戻ります。
+- セッションが無効な場合は `/auth/reset` でCookieを消去して `/login?expired=1` に戻るため、リダイレクトループは起きません。
+
+### Vercel で Preview を公開する手順
+
+1. https://vercel.com/new で GitHub リポジトリ `salon-sns` を Import（Framework: Next.js は自動検出）
+2. Environment Variables に `NEXT_PUBLIC_DEMO_MODE=true` と `DEMO_SESSION_SECRET=<32文字以上のランダム値>` を設定（Supabase / AI のキーは不要）
+3. Deploy → 発行された URL の `/login` で「Demoで試す」をクリック
+4. 以後 main への push で Production、ブランチ push で Preview が自動デプロイされます
+
+※ GitHub Pages は静的ホスティングのため、このNext.jsアプリ（サーバー処理あり）は表示できません（READMEが表示されます）。
 - 新規ユーザーもオンボーディングやサイドバーから「デモ組織」を追加できます（Supabaseモードでも可）。
 - デモ組織は `organizations.is_demo = true`。SNSリーチや広告成果などのモック数値は **デモ組織にだけ** 表示し、本番組織には未連携の空状態を表示します。
 - AIはAPIキーがなければ Mock Provider が Brand Brain を使ったモック応答を返します。

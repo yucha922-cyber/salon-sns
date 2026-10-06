@@ -105,10 +105,10 @@ test("sign up → onboarding → Brand Brain → chat → post → planner", asy
 
 test("demo account shows the NAORU demo organization", async ({ page }) => {
   await page.goto("/login");
-  await page.getByRole("button", { name: /デモアカウントで試す/ }).click();
+  await page.getByRole("button", { name: /Demoで試す/ }).click();
   await expect(page).toHaveURL(/\/dashboard/);
   await expect(page.getByText("DEMO").first()).toBeVisible();
-  await expect(page.getByText("合計リーチ")).toBeVisible();
+  await expect(page.getByText("エンゲージメント率").first()).toBeVisible();
   await page.getByRole("link", { name: "⌁ 広告ダッシュボード", exact: true }).click();
   await expect(page.getByText("秋の姿勢改善キャンペーン")).toBeVisible();
 });

@@ -121,7 +121,7 @@ describe("operations overview + recommendations", () => {
     const all = computeOperationsOverview({ accounts, locations, posts, campaigns });
     expect(all.activeLocations).toBe(3);
     expect(all.activeAccounts).toBe(8);
-    expect(all.recruitmentAccounts).toBe(1);
+    expect(all.recruitmentAccounts).toBe(2);
     expect(all.acquisitionAccounts).toBe(5);
     expect(all.locations.map((l) => l.name)).toEqual(["本部（HQ）", "NAORU整体 渋谷院", "NAORU整体 池袋院", "NAORU整体 横浜院"]);
     const shibuyaId = locations[0]!.locationId;

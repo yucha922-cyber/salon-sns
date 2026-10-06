@@ -46,6 +46,7 @@ export function LoginForm({ demoMode }: { demoMode: boolean }) {
   return (
     <form onSubmit={onSubmit} noValidate>
       {params.get("confirmed") && <div className="form-success">メールアドレスを確認しました。ログインしてください。</div>}
+      {params.get("expired") && <div className="form-success">セッションの有効期限が切れたか、デモデータがリセットされました。もう一度ログインしてください。</div>}
       {error && <div className="form-error" role="alert">{error}</div>}
       <Field label="メールアドレス" htmlFor="email" error={fieldErrors.email}>
         <input id="email" className={`input ${fieldErrors.email ? "invalid" : ""}`} type="email" autoComplete="email"
@@ -62,7 +63,7 @@ export function LoginForm({ demoMode }: { demoMode: boolean }) {
         <>
           <div className="auth-divider">または</div>
           <button type="button" className="button" style={{ width: "100%", justifyContent: "center", height: 38 }} onClick={demoLogin} disabled={pending}>
-            ✳ デモアカウントで試す（NAORU整体 渋谷院）
+            ✳ Demoで試す（NAORU Demo HQ）
           </button>
         </>
       )}

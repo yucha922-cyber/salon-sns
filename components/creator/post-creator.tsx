@@ -19,6 +19,7 @@ const FORMATS: Record<SocialPlatform, ContentType[]> = {
 
 interface Draft {
   title: string;
+  hook: string;
   caption: string;
   cta: string;
   hashtags: string;
@@ -41,6 +42,8 @@ export interface CreatorDefaults {
   tones: string[];
   initialTheme: string;
   initialDate: string;
+  /** YYYY-MM-DD (JST), computed on the server */
+  tomorrowDate: string;
   accounts: CreatorAccountOption[];
   locations: { id: string; name: string }[];
   campaigns: { id: string; name: string; theme: string }[];
@@ -58,10 +61,6 @@ export interface CreatorDefaults {
   } | null;
 }
 
-function toLocalInput(date: Date): string {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
 
 export function PostCreator({ defaults }: { defaults: CreatorDefaults }) {
   const router = useRouter();
@@ -86,11 +85,8 @@ export function PostCreator({ defaults }: { defaults: CreatorDefaults }) {
   const [provider, setProvider] = useState<string | null>(null);
   const [scheduledAt, setScheduledAt] = useState(() => {
     if (planned?.scheduledAtLocal) return planned.scheduledAtLocal;
-    if (defaults.initialDate) return `${defaults.initialDate}T20:00`;
-    const d = new Date();
-    d.setDate(d.getDate() + 1);
-    d.setHours(20, 0, 0, 0);
-    return toLocalInput(d);
+    // Default comes from the server (Japan time) so SSR and hydration match.
+    return `${defaults.initialDate || defaults.tomorrowDate}T20:00`;
   });
   const [status, setStatus] = useState<PostStatus>("scheduled");
   const [error, setError] = useState<string | null>(null);
@@ -137,7 +133,7 @@ export function PostCreator({ defaults }: { defaults: CreatorDefaults }) {
         return;
       }
       const d = result.data.draft;
-      setDraft({ title: d.title, caption: d.caption, cta: d.cta, hashtags: d.hashtags.join(" ") });
+      setDraft({ title: d.title, hook: d.hook, caption: d.caption, cta: d.cta, hashtags: d.hashtags.join(" ") });
       setProvider(result.data.provider);
       toast("Brand Brainを反映した投稿を生成しました");
     });
@@ -176,6 +172,7 @@ export function PostCreator({ defaults }: { defaults: CreatorDefaults }) {
         status,
         scheduledAt: status === "scheduled" || scheduledAt ? new Date(scheduledAt).toISOString() : null,
         generationInput: { theme, target, goal, tone, notes },
+        hook: draft.hook,
         ...scope,
       });
       if (!result.ok) {
@@ -289,6 +286,7 @@ export function PostCreator({ defaults }: { defaults: CreatorDefaults }) {
             ) : draft ? (
               <>
                 <b>{handle || "your_brand"}</b>{" "}
+                {draft.hook && <><b style={{ fontWeight: 600 }}>{draft.hook}</b><br /></>}
                 <span style={{ whiteSpace: "pre-wrap" }}>{draft.caption}</span>
                 {draft.cta && <><br /><br />{draft.cta}</>}
                 <br /><br />
@@ -304,6 +302,9 @@ export function PostCreator({ defaults }: { defaults: CreatorDefaults }) {
           <div className="form-panel result-editor" style={{ marginTop: 14 }}>
             <Field label="タイトル" htmlFor="draftTitle">
               <input id="draftTitle" className="input" value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} />
+            </Field>
+            <Field label="フック（冒頭の一言）" htmlFor="draftHook">
+              <input id="draftHook" className="input" value={draft.hook} onChange={(e) => setDraft({ ...draft, hook: e.target.value })} />
             </Field>
             <Field label="キャプション" htmlFor="draftCaption">
               <textarea id="draftCaption" className="textarea" style={{ minHeight: 130 }} value={draft.caption}

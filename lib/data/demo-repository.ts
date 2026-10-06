@@ -45,7 +45,11 @@ const now = () => new Date().toISOString();
 export class DemoRepository implements DataRepository {
   readonly mode = "demo" as const;
 
-  constructor(readonly userId: ID) {}
+  /** @param idGen id generator (deterministic for the shared demo seed) */
+  constructor(
+    readonly userId: ID,
+    private readonly idGen: () => ID = newId,
+  ) {}
 
   /** Tenant guard: equivalent of RLS for the in-memory store. */
   private assertMember(organizationId: ID, write = false): void {
@@ -70,7 +74,7 @@ export class DemoRepository implements DataRepository {
   async createOrganization(name: string, options?: { isDemo?: boolean }): Promise<Organization> {
     const store = getDemoStore();
     const organization: Organization = {
-      id: newId(),
+      id: this.idGen(),
       name: name.trim(),
       isDemo: options?.isDemo ?? false,
       createdAt: now(),
@@ -81,7 +85,7 @@ export class DemoRepository implements DataRepository {
       ...emptyBrandBrainInput(),
       companyName: organization.name,
       brandName: organization.name,
-      brandId: newId(),
+      brandId: this.idGen(),
       organizationId: organization.id,
       onboardingStep: 0,
       onboardingCompletedAt: null,
@@ -117,7 +121,7 @@ export class DemoRepository implements DataRepository {
     const saved: BrandBrain = {
       ...current,
       ...structuredClone(input),
-      locations: input.locations.map((l) => ({ ...l, id: l.id ?? newId() })),
+      locations: input.locations.map((l) => ({ ...l, id: l.id ?? this.idGen() })),
       onboardingStep: Math.max(current.onboardingStep, options.onboardingStep ?? 0),
       onboardingCompletedAt:
         current.onboardingCompletedAt ?? (options.completeOnboarding ? now() : null),
@@ -148,7 +152,7 @@ export class DemoRepository implements DataRepository {
   async createPost(organizationId: ID, input: NewPostInput): Promise<Post> {
     this.assertMember(organizationId, true);
     const post: Post = {
-      id: newId(),
+      id: this.idGen(),
       organizationId,
       platform: input.platform,
       contentType: input.contentType,
@@ -197,7 +201,7 @@ export class DemoRepository implements DataRepository {
 
   async createConversation(organizationId: ID, title: string): Promise<Omit<Conversation, "messages">> {
     this.assertMember(organizationId, true);
-    const record = { id: newId(), organizationId, userId: this.userId, title, updatedAt: now(), messages: [] };
+    const record = { id: this.idGen(), organizationId, userId: this.userId, title, updatedAt: now(), messages: [] };
     getDemoStore().conversations.push(record);
     persistDemoStore();
     return { id: record.id, title: record.title, updatedAt: record.updatedAt };
@@ -213,7 +217,7 @@ export class DemoRepository implements DataRepository {
       (x) => x.id === conversationId && x.organizationId === organizationId && x.userId === this.userId,
     );
     if (!c) throw new RepositoryError("conversation not found", "not_found");
-    const saved: ChatMessage = { id: newId(), role: message.role, content: message.content, createdAt: now() };
+    const saved: ChatMessage = { id: this.idGen(), role: message.role, content: message.content, createdAt: now() };
     c.messages.push(saved);
     c.updatedAt = saved.createdAt;
     persistDemoStore();
@@ -262,7 +266,7 @@ export class DemoRepository implements DataRepository {
         existing.handle = handle;
       } else {
         store.accounts.push({
-          id: newId(),
+          id: this.idGen(),
           organizationId,
           platform,
           handle,
@@ -299,7 +303,7 @@ export class DemoRepository implements DataRepository {
         locationId,
       });
     } else {
-      record = { ...structuredClone(input), locationId, id: newId(), organizationId, isBrandDefault: false, connectionStatus: "manual" };
+      record = { ...structuredClone(input), locationId, id: this.idGen(), organizationId, isBrandDefault: false, connectionStatus: "manual" };
       store.accounts.push(record);
     }
     persistDemoStore();
@@ -383,7 +387,7 @@ export class DemoRepository implements DataRepository {
     if (campaignId && !record) throw new RepositoryError("campaign not found", "not_found");
     if (record) Object.assign(record, structuredClone(input));
     else {
-      record = { ...structuredClone(input), id: newId(), organizationId, createdAt: now() };
+      record = { ...structuredClone(input), id: this.idGen(), organizationId, createdAt: now() };
       store.hqCampaigns.push(record);
     }
     persistDemoStore();
@@ -422,7 +426,7 @@ export class DemoRepository implements DataRepository {
       const { organizationId: _org, ...pillar } = existing;
       return structuredClone(pillar);
     }
-    const pillar: ContentPillar = { id: newId(), key, label: input.label, goal: input.goal, description: input.description, isSystem: false };
+    const pillar: ContentPillar = { id: this.idGen(), key, label: input.label, goal: input.goal, description: input.description, isSystem: false };
     store.contentPillars.push({ ...pillar, organizationId });
     persistDemoStore();
     return structuredClone(pillar);
@@ -446,10 +450,10 @@ export class DemoRepository implements DataRepository {
     this.ownedOrNull(organizationId, "campaign", input.hqCampaignId);
     const proposal: PlanProposal = {
       ...structuredClone(input),
-      id: newId(),
+      id: this.idGen(),
       status: "pending",
       createdAt: now(),
-      items: input.items.map((item) => ({ ...structuredClone(item), id: newId(), status: "pending", postId: null })),
+      items: input.items.map((item) => ({ ...structuredClone(item), id: this.idGen(), status: "pending", postId: null })),
     };
     getDemoStore().planProposals.push({ ...proposal, organizationId });
     persistDemoStore();
@@ -508,7 +512,7 @@ export class DemoRepository implements DataRepository {
     const created = inputs.map((input) => {
       this.ownedOrNull(organizationId, "location", input.locationId);
       this.ownedOrNull(organizationId, "account", input.socialAccountId);
-      const rec: Recommendation = { ...structuredClone(input), id: newId(), organizationId, status: "pending", createdAt: now() };
+      const rec: Recommendation = { ...structuredClone(input), id: this.idGen(), organizationId, status: "pending", createdAt: now() };
       return rec;
     });
     getDemoStore().recommendations.push(...created);

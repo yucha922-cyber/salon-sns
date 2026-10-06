@@ -70,20 +70,26 @@ function mockChatAnswer(brain: BrandBrainInput, question: string): string {
   }
 
   if (q.includes("instagram") || q.includes("投稿") || q.includes("sns") || q.includes("今月")) {
+    const staffStrength = ctx.strengths.find((x) => x.includes("資格")) ?? strength;
     return [
-      `今月のInstagramは、${target}の「${pain}」をテーマに週3本のペースがおすすめです。`,
+      `${name}のBrand Brain（ターゲット：${target}／悩み：${ctx.painPoints.slice(0, 3).join("・") || pain}）をもとに、今月のInstagramは週4本・次の5つの柱がおすすめです。`,
       "",
-      "| 週 | 形式 | テーマ |",
-      "|---|---|---|",
-      `| 1週目 | Reel | ${pain}をやわらげる1分セルフケア |`,
-      `| 2週目 | カルーセル | ${pain2}を招く習慣チェックリスト |`,
-      `| 3週目 | フィード | 「${strength}」の舞台裏 |`,
-      `| 4週目 | Reel | ${service ? `${service.name}の流れ紹介` : "はじめての方へのご案内"} |`,
+      `① ${pain}How-to（Reel・週1）`,
+      `　例：「${pain}が治らない人のNG習慣3選」「1分でできる${pain2}ケア」— 保存を狙う`,
+      "② Before / After（月2本）",
+      `　例：「${strength}でわかる施術前後の変化」— 許諾済み・効果の断定はしない`,
+      "③ スタッフの専門性（月2本）",
+      `　例：「${staffStrength}のスタッフが大切にしていること」— 信頼をつくる`,
+      "④ 口コミ・お客様の声（月2本）",
+      "　例：「仕事帰りに通いやすい」— 許諾を得た声だけを使う",
+      "⑤ セルフケア（カルーセル・週1）",
+      `　例：「デスクワーク中の正しい姿勢」— ${target}の日常に寄り添う`,
       "",
-      `SNS目標「${ctx.goals.social || "保存・プロフィール遷移を増やす"}」に合わせ、各投稿に保存を促すCTAを入れましょう。`,
-      "次の一手: 1週目の投稿を「AI投稿作成」で作成しましょう。",
+      `前半は①⑤で認知と保存を集め、後半は②③④で信頼をつくり、${ctx.goals.marketing ? `「${ctx.goals.marketing}」` : "予約"}につなげましょう。`,
+      "次の一手: 投稿カレンダーの「AIで1ヶ月分作成」で、この構成の企画案をアカウントごとに作れます。",
     ].join("\n");
   }
+
 
   return [
     `${name}のBrand Brainをもとに考えますね。`,

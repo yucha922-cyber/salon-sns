@@ -27,15 +27,15 @@ export const DEMO_ACCOUNT = {
 } as const;
 
 export const DEMO_BRAND_BRAIN: BrandBrainInput = {
-  companyName: "NAORU 株式会社",
+  companyName: "NAORU Demo HQ",
   brandName: "NAORU整体",
   industry: { key: "seitai", label: "整体 / Healthcare / Wellness" },
   businessDescription:
     "渋谷駅徒歩5分の完全個室の整体院。AI姿勢分析と国家資格保有者の施術で、デスクワークによる肩こり・首こり・姿勢の崩れを根本からケアします。",
   website: "naorusalon.jp/shibuya",
   social: {
-    instagram: "",
-    threads: "@naoru_official",
+    instagram: "@naoru_recruit",
+    threads: "@naoru_careers",
     tiktok: "",
     facebook: "",
   },
@@ -50,7 +50,7 @@ export const DEMO_BRAND_BRAIN: BrandBrainInput = {
     { name: "初回カウンセリング", description: "30分。AI姿勢分析とセルフケア指導。", price: 3300 },
   ],
   serviceDescription: "仕事帰りに通える21時まで営業。姿勢分析の結果をもとに、一人ひとりに合わせた施術計画を提案します。",
-  strengths: ["AI姿勢分析", "国家資格保有者が担当", "完全個室の落ち着いた空間"],
+  strengths: ["AI姿勢分析", "国家資格者が担当", "原因分析", "清潔感のある完全個室"],
   features: ["21時まで営業", "渋谷駅徒歩5分", "LINEで簡単予約"],
   competitors: [
     { name: "渋谷整体サロン", note: "低価格・回数券中心" },
@@ -58,11 +58,11 @@ export const DEMO_BRAND_BRAIN: BrandBrainInput = {
   ],
   differentiators: ["データで姿勢の変化を可視化", "施術とセルフケア指導をセットで提供"],
   targetAudience: {
-    summary: "渋谷・表参道エリアで働くデスクワーカー",
-    ageRange: "30代（28〜42歳）",
-    gender: "女性 70% / 男性 30%",
+    summary: "30代女性 / 渋谷勤務 / デスクワーク",
+    ageRange: "30代",
+    gender: "女性中心（約70%）",
     occupation: "渋谷勤務のデスクワーカー",
-    painPoints: ["肩こり", "首こり", "姿勢の崩れ", "仕事終わりの疲れ"],
+    painPoints: ["肩こり", "首こり", "姿勢", "疲労"],
     useCases: ["仕事帰りのリフレッシュ", "月1回の定期メンテナンス"],
   },
   personas: [
@@ -70,7 +70,7 @@ export const DEMO_BRAND_BRAIN: BrandBrainInput = {
     { name: "根本から姿勢を整えたい人", description: "マッサージでは戻ってしまうので、原因から改善したい。" },
     { name: "美容と健康を両立したい人", description: "姿勢を整えて見た目の印象も良くしたい。" },
   ],
-  brandPersonality: ["清潔感", "専門性", "都会的", "親しみやすい"],
+  brandPersonality: ["専門的", "親しみやすい", "都会的", "清潔感"],
   brandTone: ["やさしく、話しかけるように", "専門用語はわかりやすく説明", "過度な効果保証を避ける"],
   writingTone: "専門家としての信頼感を保ちつつ、友人に話しかけるようなやさしい文体。絵文字は1投稿2つまで。",
   marketingGoals: "新規体験予約を月40件獲得する",
@@ -79,94 +79,69 @@ export const DEMO_BRAND_BRAIN: BrandBrainInput = {
   aiContext: "初回カウンセリング（¥3,300）を入口にする。「治る」など医療的な断定表現は使わない。",
 };
 
-/** Demo posts, scheduled relative to "today" so the planner always looks alive. */
-export function buildDemoPosts(now: Date = new Date()): NewPostInput[] {
-  // Times are Japan time regardless of the server's timezone.
-  const [y, m, d] = jstDateKey(now).split("-").map(Number) as [number, number, number];
-  const at = (dayOffset: number, hour: number, minute = 0): string =>
-    new Date(Date.UTC(y, m - 1, d + dayOffset, hour - 9, minute)).toISOString();
+/**
+ * Demo planner posts spread over the current month (Japan time): past days are
+ * "published", upcoming ones "scheduled" or "draft". Acquisition and
+ * recruitment posts across stores and HQ accounts.
+ */
+export type DemoPost = NewPostInput & { accountHandle: string };
+
+export function buildDemoPosts(now: Date = new Date()): DemoPost[] {
+  const [y, m, today] = jstDateKey(now).split("-").map(Number) as [number, number, number];
+  const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const at = (day: number, hour: number, minute = 0): string =>
+    new Date(Date.UTC(y, m - 1, Math.min(day, lastDay), hour - 9, minute)).toISOString();
+  const statusFor = (day: number, draft = false): NewPostInput["status"] =>
+    Math.min(day, lastDay) < today ? "published" : draft ? "draft" : "scheduled";
+  const p = (
+    accountHandle: string,
+    platform: NewPostInput["platform"],
+    contentType: NewPostInput["contentType"],
+    day: number,
+    hour: number,
+    title: string,
+    caption: string,
+    cta: string,
+    hashtags: string[],
+    draft = false,
+  ): DemoPost => ({ accountHandle, platform, contentType, title, caption, cta, hashtags, status: statusFor(day, draft), scheduledAt: at(day, hour), source: "demo" });
+
   return [
-    {
-      platform: "instagram",
-      contentType: "reel",
-      title: "肩こりを招くデスクワークのNG習慣3選",
-      caption: "デスクワーク中、無意識にやっていませんか？肩こりにつながる習慣と、今日からできる小さな工夫をご紹介します。",
-      cta: "保存して、あとで見返してくださいね",
-      hashtags: ["#渋谷整体", "#姿勢改善", "#肩こりケア"],
-      status: "scheduled",
-      scheduledAt: at(0, 20),
-      source: "demo",
-    },
-    {
-      platform: "threads",
-      contentType: "text",
-      title: "夕方になると肩が重くなる理由",
-      caption: "夕方の肩の重さは、座り姿勢の「前のめり」が積み重なったサインかもしれません。",
-      cta: "気になる方はプロフィールから相談を",
-      hashtags: ["#デスクワーク"],
-      status: "draft",
-      scheduledAt: at(1, 12),
-      source: "demo",
-    },
-    {
-      platform: "instagram",
-      contentType: "carousel",
-      title: "1分でできる姿勢リセット習慣",
-      caption: "椅子に座ったままできる、1分間の姿勢リセット。仕事の合間にどうぞ。",
-      cta: "保存してデスクで試してみてください",
-      hashtags: ["#姿勢リセット", "#渋谷整体"],
-      status: "draft",
-      scheduledAt: at(2, 19, 30),
-      source: "demo",
-    },
-    {
-      platform: "tiktok",
-      contentType: "short_video",
-      title: "施術前後の姿勢チェック",
-      caption: "AI姿勢分析で、施術前後の変化を見てみましょう。",
-      cta: "初回カウンセリングはプロフィールから",
-      hashtags: ["#姿勢分析"],
-      status: "draft",
-      scheduledAt: at(4, 20),
-      source: "demo",
-    },
-    {
-      platform: "instagram",
-      contentType: "feed",
-      title: "初回カウンセリングの流れをご紹介",
-      caption: "はじめての方も安心。カウンセリングから施術、セルフケア指導までの流れをご紹介します。",
-      cta: "ご予約はプロフィールのリンクから",
-      hashtags: ["#渋谷整体", "#初回カウンセリング"],
-      status: "scheduled",
-      scheduledAt: at(6, 12),
-      source: "demo",
-    },
-    {
-      platform: "instagram",
-      contentType: "reel",
-      title: "首こりに効く、デスクでできるストレッチ",
-      caption: "首まわりが固まりやすい方へ。30秒でできるストレッチです。",
-      cta: "保存して毎日の習慣に",
-      hashtags: ["#首こり", "#ストレッチ"],
-      status: "published",
-      scheduledAt: at(-3, 20),
-      source: "demo",
-    },
+    p("@naoru_shibuya", "instagram", "reel", 2, 20, "肩こりが治らない人のNG習慣3選", "マッサージしても肩こりが戻るのは、毎日の習慣が原因かもしれません。デスクワーク中にやりがちなNG習慣を3つ紹介します。", "保存して、あとで見返してくださいね", ["#渋谷整体", "#肩こり", "#デスクワーク"]),
+    p("@naoru_shibuya_threads", "threads", "threads_text", 3, 12, "首こりがひどい人、実は肩だけ揉んでも改善しません", "首こりがひどい人、実は肩だけ揉んでも改善しません。原因は「頭の位置」にあることが多いんです。", "気になる方はプロフィールのLINEから", ["#首こり"]),
+    p("@naoru_shibuya", "instagram", "carousel", 5, 20, "デスクワーク中の正しい姿勢", "モニターの高さ、椅子の深さ、足の置き方。今日から変えられる3つのポイントをまとめました。", "保存してデスクで試してみてください", ["#渋谷整体", "#姿勢改善", "#デスクワーク"]),
+    p("@naoru_recruit", "instagram", "reel", 6, 21, "NAORUで働くセラピストの1日", "9:45出勤、ミーティング、施術、研修。渋谷院スタッフの1日をのぞいてみませんか？", "見学・カジュアル面談はDMから", ["#セラピスト求人", "#理学療法士", "#整体師募集"]),
+    p("@naoru_ikebukuro", "instagram", "educational", 8, 19, "腰痛の原因は座り方にあった", "池袋で働く会社員に多い腰痛。座り方の癖と、昼休みにできるリセット方法を解説します。", "昼休み30分コースはプロフィールから", ["#池袋整体", "#腰痛"]),
+    p("@naoru_shibuya", "instagram", "before_after", 9, 20, "姿勢分析でわかる施術前後の変化（許諾済み）", "AI姿勢分析で、施術前後の姿勢を比べました。※効果には個人差があります。", "初回姿勢チェックはLINEから", ["#姿勢分析", "#渋谷整体"]),
+    p("@naoru_careers", "threads", "threads_text", 10, 21, "病院勤務から整体に転職して変わったこと", "病院勤務から整体院に転職して一番変わったのは、患者さん一人ひとりと向き合える時間でした。", "気になったらDMで気軽に質問を", ["#理学療法士"]),
+    p("@naoru_yokohama", "instagram", "testimonial", 12, 10, "お客様の声「子育て中でも通いやすい」（許諾済み）", "キッズスペースがあるので、子どもを連れて通えるのが助かります。（30代・横浜市在住）", "ご予約はお電話・LINEで", ["#横浜整体", "#産後骨盤矯正横浜"]),
+    p("@naoru_shibuya", "instagram", "staff", 13, 20, "スタッフ紹介：院長 佐藤（姿勢分析の専門家）", "国家資格を持つ院長の佐藤が、施術で大切にしていることをお話しします。", "ご予約はプロフィールのLINEから", ["#渋谷整体", "#スタッフ紹介"]),
+    p("@naoru_shibuya_threads", "threads", "threads_text", 15, 12, "夕方になると肩が重くなる理由", "夕方の肩の重さは、座り姿勢の「前のめり」が積み重なったサインかもしれません。", "プロフィールのLINEから相談できます", ["#肩こり"]),
+    p("@naoru_recruit", "instagram", "carousel", 16, 21, "入社1年目で身につく技術と研修", "未経験の手技も3ヶ月で現場デビュー。研修カリキュラムをまとめました。", "採用ページはプロフィールから", ["#セラピスト求人", "#整体師募集"], true),
+    p("@naoru_ikebukuro_threads", "threads", "threads_text", 17, 12, "昼休み30分で整える、という選択肢", "昼休みの30分で体を整える人が増えています。池袋駅から徒歩3分です。", "プロフィールから予約", ["#池袋整体"]),
+    p("@naoru_shibuya", "instagram", "reel", 19, 20, "1分でできる首こりセルフケア", "仕事の合間に、座ったままできる首まわりのストレッチを紹介します。", "保存して毎日の習慣に", ["#首こり", "#セルフケア", "#渋谷整体"], true),
+    p("@naoru_yokohama_threads", "threads", "threads_text", 20, 9, "施術後3日間の過ごし方", "施術後は水分をしっかりとって、湯船で体を温めてください。体の軽さが長持ちします。", "次回のご予約はLINEから", ["#横浜整体"]),
+    p("@naoru_shibuya", "instagram", "offer", 22, 20, "今月限定：初回姿勢チェック無料", "デスクワーク×姿勢改善キャンペーン。今月は初回の姿勢チェックが無料です。", "LINEから初回予約", ["#渋谷整体", "#初回無料"]),
+    p("@naoru_recruit", "instagram", "staff", 24, 21, "社員インタビュー：3年目セラピストのキャリア", "教育担当になった3年目スタッフに、キャリアの選び方を聞きました。", "見学・カジュアル面談はDMから", ["#理学療法士", "#キャリア"], true),
+    p("@naoru_ikebukuro", "instagram", "carousel", 26, 19, "よくある質問：初めての整体Q&A", "服装は？時間は？痛くない？はじめての方からよくある質問にお答えします。", "ご予約はプロフィールから", ["#池袋整体", "#整体初めて"], true),
+    p("@naoru_shibuya", "instagram", "feed", 28, 20, "初回カウンセリングの流れ", "カウンセリング→AI姿勢分析→施術→セルフケア指導。はじめての方の流れをご紹介します。", "ご予約はプロフィールのリンクから", ["#渋谷整体", "#初回カウンセリング"], true),
   ];
 }
 
 export const DEMO_METRICS: { sns: MetricSummary[]; ads: MetricSummary[] } = {
   sns: [
-    { label: "SNS投稿数", value: "18本", change: "+4.2%", glyph: "▤", positive: true },
+    { label: "今月の投稿数", value: "18本", change: "+4.2%", glyph: "▤", positive: true },
     { label: "フォロワー増加", value: "+284", change: "+12.8%", glyph: "♧", positive: true },
-    { label: "合計リーチ", value: "24.8k", change: "+18.6%", glyph: "◉", positive: true },
+    { label: "リーチ", value: "24.8k", change: "+18.6%", glyph: "◉", positive: true },
     { label: "エンゲージメント率", value: "4.82%", change: "+0.6pt", glyph: "↗", positive: true },
   ],
   ads: [
     { label: "広告費", value: "¥674k", change: "+6.3%", glyph: "￥", positive: true },
-    { label: "広告CTR", value: "1.86%", change: "+0.24pt", glyph: "⌁", positive: true },
-    { label: "獲得CPA", value: "¥8,429", change: "−12.4%", glyph: "◎", positive: false },
+    { label: "CTR", value: "1.86%", change: "+0.24pt", glyph: "⌁", positive: true },
+    { label: "CVR", value: "3.4%", change: "+0.3pt", glyph: "◎", positive: true },
+    { label: "CPA", value: "¥6,425", change: "−12.4%", glyph: "◎", positive: true },
     { label: "ROAS", value: "3.42x", change: "+0.38x", glyph: "↗", positive: true },
+    { label: "CV", value: "105件", change: "+18.0%", glyph: "✓", positive: true },
   ],
 };
 
@@ -372,26 +347,30 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
   },
   {
     platform: "threads",
-    handle: "@naoru_official",
-    displayName: "NAORU 本部",
+    handle: "@naoru_careers",
+    displayName: "NAORU 採用 Threads（本部）",
     locationIndex: null,
-    goal: "branding",
+    goal: "recruitment",
     customGoal: "",
     active: true,
     strategy: {
-      targetAudience: "体のケアに関心がある20〜50代",
-      persona: "",
-      kpiTargets: [{ metric: "フォロワー数", target: null, unit: "人" }],
-      contentPillars: ["brand_story", "expertise_column", "network"],
+      targetAudience: "20〜30代 / 理学療法士・柔道整復師・セラピスト",
+      persona: "転職をぼんやり考えている若手セラピスト。働く人の本音や職場のリアルを短い言葉で知りたい。",
+      kpiTargets: [
+        { metric: "プロフィールアクセス", target: 300, unit: "回/月" },
+        { metric: "DM", target: 5, unit: "件/月" },
+      ],
+      contentPillars: ["employee_voice", "culture", "day_in_the_life", "career"],
       postsPerWeek: 3,
-      postingFrequencyNote: "",
+      postingFrequencyNote: "スタッフの本音を短文で",
       preferredPostingDays: [1, 3, 5],
-      preferredPostingTimes: ["08:00"],
-      cta: "お近くの店舗はプロフィールから",
-      tone: "上品で信頼感のある専門家トーン",
+      preferredPostingTimes: ["21:00"],
+      cta: "気になったらDMで気軽に質問を",
+      tone: "等身大で、働く人の言葉で",
       notes: "",
     },
   },
+
 ];
 
 export const DEMO_LOCATION_PROFILES: LocationProfileInput[] = [
@@ -457,6 +436,30 @@ export function buildDemoHqCampaign(now: Date = new Date()): Omit<HqCampaignInpu
 
 /** Recommendations seeded for the demo (handles are resolved to account ids). */
 export const DEMO_RECOMMENDATIONS: (Omit<RecommendationInput, "locationId" | "socialAccountId"> & { accountHandle: string | null })[] = [
+  {
+    accountHandle: "@naoru_shibuya",
+    category: "social",
+    severity: "medium",
+    title: "渋谷院InstagramのReel保存率が高いため、今週はHow-to系投稿を2本増やすことをおすすめします",
+    observation: "直近のReel投稿の保存率が平均より32%高く、特に「肩こりセルフケア」系の保存が伸びています。",
+    insight: "保存は「あとで試したい」という意図の表れで、予約前の比較検討につながりやすい行動です。",
+    hypothesis: "How-to系Reelを週2本追加すると、プロフィールアクセスとLINE登録が増える可能性があります。",
+    recommendedAction: "今週の投稿計画に「1分でできるセルフケア」系Reelを2本追加してください。",
+    expectedImpact: "保存数・プロフィールアクセスの増加",
+    confidence: 0.8,
+  },
+  {
+    accountHandle: null,
+    category: "creative",
+    severity: "high",
+    title: "肩こり訴求CreativeのCTRが直近7日平均より18%低下しています",
+    observation: "Meta広告の肩こり訴求クリエイティブで、CTRが直近7日平均から18%低下しました。LPのCVRは維持されています。",
+    insight: "同じクリエイティブの配信が続き、広告疲労が起きている可能性があります。",
+    hypothesis: "ファーストビューを「デスクワーク中の姿勢」に変えた新案でCTRが回復する可能性があります。",
+    recommendedAction: "Creative Studioで新しいコンセプトを2案作り、現行広告と並行テストしてください（予算変更はしません）。",
+    expectedImpact: "CTRの回復・CPAの維持",
+    confidence: 0.7,
+  },
   {
     accountHandle: "@naoru_ikebukuro",
     category: "acquisition",

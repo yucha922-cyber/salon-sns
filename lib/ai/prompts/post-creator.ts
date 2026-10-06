@@ -24,6 +24,7 @@ export function buildPostCreatorRequest(
     `あなたは「${ctx.brand.name}」のSNS編集者です。Brand Brainに沿って、そのまま投稿できる${platform}の${format}投稿を作ります。`,
     "出力ルール:",
     "- title: 投稿の見出し（画像のメインコピーにもなる、30文字以内）",
+    "- hook: 冒頭1文（スクロールを止める問いかけ・共感の一言、40文字以内）",
     "- caption: 本文。冒頭1行で読者の悩みに共感し、ブランドのトーンで書く。改行で読みやすく。",
     "- cta: 保存・プロフィール遷移・予約など、目的に合う行動喚起を1文。",
     "- hashtags: '#'付きで5〜8個。地域・業種・悩みを組み合わせる。",
@@ -97,6 +98,7 @@ export function buildPostCreatorRequest(
         : [...localTags, area ? `#${area}${industryTag.slice(1)}` : industryTag, industryTag, `#${pain.replace(/\s/g, "")}`, `#${(ctx.brand.name || "サロン").replace(/\s/g, "")}`];
       return {
         title: (campaign ? `${headline}｜${locationName}` : input.theme).slice(0, 60),
+        hook: isRecruit ? `${locationName}で働くって、実際どう？` : `「${pain}」、仕事のせいだと諦めていませんか？`,
         caption,
         cta:
           account?.strategy.cta ||

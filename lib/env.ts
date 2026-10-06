@@ -14,7 +14,17 @@ export function getSupabasePublicConfig(): { url: string; anonKey: string } | nu
   return { url, anonKey };
 }
 
+/**
+ * NEXT_PUBLIC_DEMO_MODE=true forces demo mode (even if Supabase is configured),
+ * which is the safe setting for preview deployments. Without the flag, the app
+ * uses Supabase when its env vars exist and falls back to demo mode otherwise.
+ */
+export function isDemoModeForced(): boolean {
+  return process.env.NEXT_PUBLIC_DEMO_MODE === "true";
+}
+
 export function getDataMode(): DataMode {
+  if (isDemoModeForced()) return "demo";
   return getSupabasePublicConfig() ? "supabase" : "demo";
 }
 

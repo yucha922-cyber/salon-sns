@@ -106,6 +106,7 @@ export const savePostSchema = z.object({
   status: z.enum(POST_STATUSES),
   scheduledAt: z.string().datetime({ offset: true }).nullable(),
   generationInput: z.record(z.string(), z.string().max(500)).optional(),
+  hook: text(200).optional(),
   accountId: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/).nullable().optional(),
   locationId: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/).nullable().optional(),
   hqCampaignId: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/).nullable().optional(),

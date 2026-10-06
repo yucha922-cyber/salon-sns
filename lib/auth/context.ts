@@ -19,7 +19,9 @@ export interface AppContext {
 /** Signed-in user + repository, or redirect to /login. */
 export const requireUser = cache(async (): Promise<{ user: AppUser; repo: DataRepository }> => {
   const user = await getCurrentUser();
-  if (!user) redirect("/login");
+  // A cookie exists (middleware let us in) but the session is unknown/expired:
+  // clear it via /auth/reset instead of bouncing between /login and here.
+  if (!user) redirect("/auth/reset");
   return { user, repo: await getRepository(user) };
 });
 

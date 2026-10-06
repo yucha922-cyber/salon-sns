@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 async function loginDemo(page: Page) {
   await page.goto("/login");
-  await page.getByRole("button", { name: /デモアカウントで試す/ }).click();
+  await page.getByRole("button", { name: /Demoで試す/ }).click();
   await expect(page).toHaveURL(/\/dashboard/);
 }
 

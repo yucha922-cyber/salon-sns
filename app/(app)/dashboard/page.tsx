@@ -133,7 +133,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         </div>
       </section>
 
-      <section className="metric-grid">
+      <section className={`metric-grid ${metrics.ads ? "five" : ""}`}>
         {metrics.sns.map((m) => (
           <MetricCard key={m.label} metric={m} note={m.value === "—" ? "SNS連携後に表示されます" : "Brand Brainの投稿データ"} />
         ))}

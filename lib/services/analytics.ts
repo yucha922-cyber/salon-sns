@@ -9,7 +9,12 @@ import { DEMO_AD_METRICS, DEMO_CAMPAIGNS, DEMO_METRICS } from "@/lib/demo/seed";
  *     (post counts) and explicit "未連携" placeholders — never fake numbers.
  */
 export function getDashboardMetrics(org: Organization, posts: Post[]): { sns: MetricSummary[]; ads: MetricSummary[] | null } {
-  if (org.isDemo) return DEMO_METRICS;
+  if (org.isDemo) {
+    // "今月の投稿数" reflects the real planner data; the rest is demo analytics.
+    const month = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit" }).format(new Date());
+    const count = posts.filter((p) => p.scheduledAt && new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit" }).format(new Date(p.scheduledAt)) === month).length;
+    return { ...DEMO_METRICS, sns: DEMO_METRICS.sns.map((m, i) => (i === 0 ? { ...m, value: `${count}本` } : m)) };
+  }
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
   const thisMonth = posts.filter((p) => (p.scheduledAt ?? p.createdAt) >= monthStart);
