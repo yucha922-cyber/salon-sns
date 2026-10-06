@@ -1,25 +1,26 @@
 import { requireAppContext } from "@/lib/auth/context";
-import { getCampaigns, getRecommendations } from "@/lib/services/analytics";
+import { getCampaigns } from "@/lib/services/analytics";
 import { PageHeading } from "@/components/ui/page-heading";
-import { EmptyState } from "@/components/ui/states";
-import { AnalysisView } from "@/components/ads/analysis-view";
+import { RecommendationList } from "@/components/recommendations/recommendation-list";
+import { AdAnalysisPanel } from "@/components/ads/analysis-view";
 
 export default async function AnalysisPage() {
-  const { current } = await requireAppContext();
-  const recommendations = getRecommendations(current.organization);
-  const canAnalyze = getCampaigns(current.organization).length > 0;
+  const { repo, current } = await requireAppContext();
+  const orgId = current.organization.id;
+  const [recommendations, accounts] = await Promise.all([repo.listRecommendations(orgId), repo.listAccounts(orgId)]);
+  const canAnalyzeAds = getCampaigns(current.organization).length > 0;
   return (
     <>
-      <PageHeading eyebrow="AIマーケター" title="AI分析と改善提案" description="データを見つめるだけでなく、次のアクションまで提案します。" />
-      {recommendations.length || canAnalyze ? (
-        <AnalysisView recommendations={recommendations} canAnalyze={canAnalyze} />
-      ) : (
-        <div className="panel">
-          <EmptyState icon="◉" title="分析できるデータがまだありません"
-            description="SNS・広告アカウントの連携後、AIが投稿と広告の実績から改善点を提案します。いまはAIマーケターに戦略を相談できます。"
-            action={{ label: "AIマーケターに相談", href: "/chat" }} />
-        </div>
-      )}
+      <PageHeading eyebrow="AIマーケター" title="AI分析と改善提案"
+        description="AIが運用状況から改善案を出し、人が承認・却下・完了を判断します。承認しても自動で実行されることはありません。" />
+      <div className="panel">
+        <RecommendationList
+          recommendations={recommendations}
+          accountLabels={Object.fromEntries(accounts.map((a) => [a.id, a.handle]))}
+          readOnly={current.role === "viewer"}
+        />
+      </div>
+      {canAnalyzeAds && <AdAnalysisPanel />}
     </>
   );
 }

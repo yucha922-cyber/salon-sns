@@ -7,6 +7,7 @@ import { POST_STATUSES } from "@/lib/domain/types";
 import { EmptyState } from "@/components/ui/states";
 import { PostEditModal } from "./post-edit-modal";
 import { formatSchedule } from "./post-row";
+import { isPlannedOnly } from "@/lib/domain/posts";
 
 export function PostsTable({ posts, accountLabels = {} }: { posts: Post[]; accountLabels?: Record<string, string> }) {
   const [filter, setFilter] = useState<PostStatus | "all">("all");
@@ -42,8 +43,8 @@ export function PostsTable({ posts, accountLabels = {} }: { posts: Post[]; accou
                   <td className="table-muted">{(p.accountId && accountLabels[p.accountId]) || "—"}</td>
                   <td className="table-muted">{PLATFORM_LABELS[p.platform]} · {CONTENT_TYPE_LABELS[p.contentType]}</td>
                   <td className="table-muted">{formatSchedule(p.scheduledAt, true)}</td>
-                  <td><span className={`status-pill ${POST_STATUS_PILL[p.status]}`}>{POST_STATUS_LABELS[p.status]}</span></td>
-                  <td className="table-muted">{p.source === "ai_post_creator" ? "AI生成" : p.source === "hq_localization" ? "本部ローカライズ" : p.source === "demo" ? "デモ" : "手動"}</td>
+                  <td><span className={`status-pill ${isPlannedOnly(p) ? "review" : POST_STATUS_PILL[p.status]}`}>{isPlannedOnly(p) ? "企画（本文未作成）" : POST_STATUS_LABELS[p.status]}</span></td>
+                  <td className="table-muted">{p.source === "ai_post_creator" ? "AI生成" : p.source === "ai_planner" ? "AI月間計画" : p.source === "hq_localization" ? "本部ローカライズ" : p.source === "demo" ? "デモ" : "手動"}</td>
                   <td><button className="more-button" aria-label="投稿を編集" onClick={() => setEditing(p)}>···</button></td>
                 </tr>
               ))}

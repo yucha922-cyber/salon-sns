@@ -16,6 +16,18 @@ import type {
   PostStatus,
   SnsAccount,
   SnsAccountInput,
+  ContentPillar,
+  AccountGoal,
+  PlanItem,
+  PlanItemInput,
+  PlanItemStatus,
+  PlanProposal,
+  PlanProposalInput,
+  PlanProposalStatus,
+  PostPlanning,
+  Recommendation,
+  RecommendationInput,
+  RecommendationStatus,
 } from "@/lib/domain/types";
 import type { DataMode } from "@/lib/env";
 
@@ -28,8 +40,15 @@ export interface SaveBrandBrainOptions {
 export interface PostPatch {
   title?: string;
   caption?: string;
+  cta?: string;
+  hashtags?: string[];
   status?: PostStatus;
   scheduledAt?: string | null;
+}
+
+export interface PlanItemPatch extends Partial<PlanItemInput> {
+  status?: PlanItemStatus;
+  postId?: ID | null;
 }
 
 /**
@@ -80,16 +99,38 @@ export interface DataRepository {
   listHqCampaigns(organizationId: ID): Promise<HqCampaign[]>;
   saveHqCampaign(organizationId: ID, campaignId: ID | null, input: HqCampaignInput): Promise<HqCampaign>;
   deleteHqCampaign(organizationId: ID, campaignId: ID): Promise<void>;
+
+  // Content pillar library (system presets + organization custom pillars)
+  listContentPillars(organizationId: ID): Promise<ContentPillar[]>;
+  createContentPillar(organizationId: ID, input: { goal: AccountGoal; label: string; description: string }): Promise<ContentPillar>;
+
+  // AI monthly plan proposals — nothing reaches the planner before approval
+  createPlanProposal(organizationId: ID, input: PlanProposalInput): Promise<PlanProposal>;
+  listPlanProposals(organizationId: ID): Promise<Omit<PlanProposal, "items">[]>;
+  getPlanProposal(organizationId: ID, proposalId: ID): Promise<PlanProposal | null>;
+  updatePlanItem(organizationId: ID, itemId: ID, patch: PlanItemPatch): Promise<PlanItem>;
+  setPlanProposalStatus(organizationId: ID, proposalId: ID, status: PlanProposalStatus): Promise<void>;
+
+  // AI recommendations (AI proposes, humans decide)
+  listRecommendations(organizationId: ID): Promise<Recommendation[]>;
+  createRecommendations(organizationId: ID, inputs: RecommendationInput[]): Promise<Recommendation[]>;
+  setRecommendationStatus(organizationId: ID, recommendationId: ID, status: RecommendationStatus): Promise<Recommendation>;
 }
 
+export type { PostPlanning };
+
 export const EMPTY_STRATEGY = {
+  targetAudience: "",
   persona: "",
-  kpis: [],
+  kpiTargets: [],
   contentPillars: [],
   postsPerWeek: 3,
   postingFrequencyNote: "",
+  preferredPostingDays: [],
+  preferredPostingTimes: [],
   cta: "",
   tone: "",
+  notes: "",
 } as const;
 
 export class RepositoryError extends Error {

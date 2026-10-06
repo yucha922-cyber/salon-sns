@@ -16,8 +16,18 @@ import type {
   SnsAccount,
   SnsAccountInput,
   SocialHandles,
+  AccountGoal,
+  ContentPillar,
+  PlanItem,
+  PlanProposal,
+  PlanProposalInput,
+  PlanProposalStatus,
+  Recommendation,
+  RecommendationInput,
+  RecommendationStatus,
 } from "@/lib/domain/types";
-import { SOCIAL_PLATFORMS } from "@/lib/domain/types";
+import { EMPTY_PLANNING, SOCIAL_PLATFORMS } from "@/lib/domain/types";
+import { customPillarKey, SYSTEM_CONTENT_PILLARS } from "@/lib/brand/content-pillars";
 import { emptyBrandBrainInput } from "@/lib/brand/defaults";
 import { sortPosts } from "@/lib/domain/posts";
 import { getDemoStore, newId, persistDemoStore } from "./demo-store";
@@ -25,6 +35,7 @@ import {
   EMPTY_STRATEGY,
   RepositoryError,
   type DataRepository,
+  type PlanItemPatch,
   type PostPatch,
   type SaveBrandBrainOptions,
 } from "./repository";
@@ -152,6 +163,7 @@ export class DemoRepository implements DataRepository {
       accountId: this.ownedOrNull(organizationId, "account", input.accountId),
       locationId: this.ownedOrNull(organizationId, "location", input.locationId),
       hqCampaignId: this.ownedOrNull(organizationId, "campaign", input.hqCampaignId),
+      planning: { ...EMPTY_PLANNING, ...input.planning, planItemId: this.ownedPlanItemOrNull(organizationId, input.planning?.planItemId) },
     };
     getDemoStore().posts.push(post);
     persistDemoStore();
@@ -257,7 +269,9 @@ export class DemoRepository implements DataRepository {
           displayName: "",
           locationId: null,
           goal: "branding",
-          strategy: { ...EMPTY_STRATEGY, kpis: [], contentPillars: [] },
+          customGoal: "",
+          active: true,
+          strategy: structuredClone({ ...EMPTY_STRATEGY, kpiTargets: [], contentPillars: [], preferredPostingDays: [], preferredPostingTimes: [] }),
           isBrandDefault: true,
           connectionStatus: "manual",
         });
@@ -299,6 +313,11 @@ export class DemoRepository implements DataRepository {
     store.accounts = store.accounts.filter((a) => !(a.id === accountId && a.organizationId === organizationId));
     store.posts.forEach((p) => {
       if (p.organizationId === organizationId && p.accountId === accountId) p.accountId = null;
+    });
+    // Mirror FKs: proposals cascade, recommendations keep the row.
+    store.planProposals = store.planProposals.filter((p) => !(p.organizationId === organizationId && p.accountId === accountId));
+    store.recommendations.forEach((r) => {
+      if (r.organizationId === organizationId && r.socialAccountId === accountId) r.socialAccountId = null;
     });
     persistDemoStore();
   }
@@ -377,5 +396,132 @@ export class DemoRepository implements DataRepository {
     const store = getDemoStore();
     store.hqCampaigns = store.hqCampaigns.filter((c) => !(c.id === campaignId && c.organizationId === organizationId));
     persistDemoStore();
+  }
+
+  // -------------------------------------------------------------------------
+  // Content pillars
+  // -------------------------------------------------------------------------
+
+  async listContentPillars(organizationId: ID): Promise<ContentPillar[]> {
+    this.assertMember(organizationId);
+    const custom = getDemoStore()
+      .contentPillars.filter((p) => p.organizationId === organizationId)
+      .map(({ organizationId: _org, ...p }) => p);
+    return structuredClone([...SYSTEM_CONTENT_PILLARS, ...custom]);
+  }
+
+  async createContentPillar(
+    organizationId: ID,
+    input: { goal: AccountGoal; label: string; description: string },
+  ): Promise<ContentPillar> {
+    this.assertMember(organizationId, true);
+    const store = getDemoStore();
+    const key = customPillarKey(input.label);
+    const existing = store.contentPillars.find((p) => p.organizationId === organizationId && p.key === key);
+    if (existing) {
+      const { organizationId: _org, ...pillar } = existing;
+      return structuredClone(pillar);
+    }
+    const pillar: ContentPillar = { id: newId(), key, label: input.label, goal: input.goal, description: input.description, isSystem: false };
+    store.contentPillars.push({ ...pillar, organizationId });
+    persistDemoStore();
+    return structuredClone(pillar);
+  }
+
+  // -------------------------------------------------------------------------
+  // Plan proposals
+  // -------------------------------------------------------------------------
+
+  private ownedPlanItemOrNull(organizationId: ID, itemId: ID | null | undefined): ID | null {
+    if (!itemId) return null;
+    const ok = getDemoStore().planProposals.some((p) => p.organizationId === organizationId && p.items.some((i) => i.id === itemId));
+    if (!ok) throw new RepositoryError("plan item does not belong to organization", "forbidden");
+    return itemId;
+  }
+
+  async createPlanProposal(organizationId: ID, input: PlanProposalInput): Promise<PlanProposal> {
+    this.assertMember(organizationId, true);
+    this.ownedOrNull(organizationId, "account", input.accountId);
+    this.ownedOrNull(organizationId, "location", input.locationId);
+    this.ownedOrNull(organizationId, "campaign", input.hqCampaignId);
+    const proposal: PlanProposal = {
+      ...structuredClone(input),
+      id: newId(),
+      status: "pending",
+      createdAt: now(),
+      items: input.items.map((item) => ({ ...structuredClone(item), id: newId(), status: "pending", postId: null })),
+    };
+    getDemoStore().planProposals.push({ ...proposal, organizationId });
+    persistDemoStore();
+    return structuredClone(proposal);
+  }
+
+  async listPlanProposals(organizationId: ID): Promise<Omit<PlanProposal, "items">[]> {
+    this.assertMember(organizationId);
+    return getDemoStore()
+      .planProposals.filter((p) => p.organizationId === organizationId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .map(({ organizationId: _org, items: _items, ...p }) => structuredClone(p));
+  }
+
+  async getPlanProposal(organizationId: ID, proposalId: ID): Promise<PlanProposal | null> {
+    this.assertMember(organizationId);
+    const p = getDemoStore().planProposals.find((x) => x.id === proposalId && x.organizationId === organizationId);
+    if (!p) return null;
+    const { organizationId: _org, ...proposal } = p;
+    return structuredClone(proposal);
+  }
+
+  async updatePlanItem(organizationId: ID, itemId: ID, patch: PlanItemPatch): Promise<PlanItem> {
+    this.assertMember(organizationId, true);
+    const proposal = getDemoStore().planProposals.find((p) => p.organizationId === organizationId && p.items.some((i) => i.id === itemId));
+    const item = proposal?.items.find((i) => i.id === itemId);
+    if (!item) throw new RepositoryError("plan item not found", "not_found");
+    Object.assign(item, Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined)));
+    persistDemoStore();
+    return structuredClone(item);
+  }
+
+  async setPlanProposalStatus(organizationId: ID, proposalId: ID, status: PlanProposalStatus): Promise<void> {
+    this.assertMember(organizationId, true);
+    const p = getDemoStore().planProposals.find((x) => x.id === proposalId && x.organizationId === organizationId);
+    if (!p) throw new RepositoryError("proposal not found", "not_found");
+    p.status = status;
+    persistDemoStore();
+  }
+
+  // -------------------------------------------------------------------------
+  // Recommendations
+  // -------------------------------------------------------------------------
+
+  async listRecommendations(organizationId: ID): Promise<Recommendation[]> {
+    this.assertMember(organizationId);
+    return structuredClone(
+      getDemoStore()
+        .recommendations.filter((r) => r.organizationId === organizationId)
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    );
+  }
+
+  async createRecommendations(organizationId: ID, inputs: RecommendationInput[]): Promise<Recommendation[]> {
+    this.assertMember(organizationId, true);
+    const created = inputs.map((input) => {
+      this.ownedOrNull(organizationId, "location", input.locationId);
+      this.ownedOrNull(organizationId, "account", input.socialAccountId);
+      const rec: Recommendation = { ...structuredClone(input), id: newId(), organizationId, status: "pending", createdAt: now() };
+      return rec;
+    });
+    getDemoStore().recommendations.push(...created);
+    persistDemoStore();
+    return structuredClone(created);
+  }
+
+  async setRecommendationStatus(organizationId: ID, recommendationId: ID, status: RecommendationStatus): Promise<Recommendation> {
+    this.assertMember(organizationId, true);
+    const rec = getDemoStore().recommendations.find((r) => r.id === recommendationId && r.organizationId === organizationId);
+    if (!rec) throw new RepositoryError("recommendation not found", "not_found");
+    rec.status = status;
+    persistDemoStore();
+    return structuredClone(rec);
   }
 }

@@ -4,13 +4,15 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireAppContext } from "@/lib/auth/context";
 import { hqCampaignInputSchema, locationProfileInputSchema, snsAccountInputSchema } from "@/lib/domain/schemas";
-import { ACCOUNT_GOALS, SOCIAL_PLATFORMS, type HqCampaign, type LocationProfile, type SnsAccount } from "@/lib/domain/types";
+import { type HqCampaign, type LocationProfile, type SnsAccount } from "@/lib/domain/types";
 import { validationError, type ActionResult } from "@/lib/actions";
 import { toUserMessage } from "@/lib/services/errors";
 import { RepositoryError } from "@/lib/data/repository";
 import { getAIProvider } from "@/lib/ai";
-import { buildAccountStrategyRequest } from "@/lib/ai/prompts/account-strategy";
-import type { AccountStrategySuggestion } from "@/lib/ai/schemas";
+import { buildAccountStrategistRequest } from "@/lib/ai/prompts/account-strategy";
+import type { AccountStrategistOutput } from "@/lib/ai/schemas";
+import { contentPillarInputSchema } from "@/lib/domain/schemas";
+import type { ContentPillar } from "@/lib/domain/types";
 import { findLocation, localizeCampaign, type LocalizationResult } from "@/lib/services/localization";
 
 const idSchema = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/);
@@ -57,23 +59,32 @@ export async function deleteAccountAction(id: unknown): Promise<ActionResult> {
   }
 }
 
-const suggestSchema = z.object({
-  platform: z.enum(SOCIAL_PLATFORMS),
-  goal: z.enum(ACCOUNT_GOALS),
-  handle: z.string().trim().max(80),
-  locationId: idSchema.nullable(),
-});
-
-export async function suggestAccountStrategyAction(input: unknown): Promise<ActionResult<AccountStrategySuggestion>> {
-  const parsed = suggestSchema.safeParse(input);
+/** AI Account Strategist: returns a proposal; the user applies it explicitly. */
+export async function runAccountStrategistAction(input: unknown): Promise<ActionResult<AccountStrategistOutput>> {
+  const parsed = snsAccountInputSchema.safeParse(input);
   if (!parsed.success) return validationError(parsed.error);
   try {
     const { repo, current, brain } = await requireAppContext();
-    const location = findLocation(await repo.listLocationProfiles(current.organization.id), parsed.data.locationId);
-    const { object } = await getAIProvider().generateStructuredObject(buildAccountStrategyRequest(brain, parsed.data, location));
+    const orgId = current.organization.id;
+    const [locations, pillars] = await Promise.all([repo.listLocationProfiles(orgId), repo.listContentPillars(orgId)]);
+    const location = findLocation(locations, parsed.data.locationId);
+    const { object } = await getAIProvider().generateStructuredObject(buildAccountStrategistRequest(brain, parsed.data, location, pillars));
     return { ok: true, data: object };
   } catch (error) {
     return { ok: false, error: toUserMessage(error, "戦略の提案に失敗しました") };
+  }
+}
+
+export async function createContentPillarAction(input: unknown): Promise<ActionResult<ContentPillar>> {
+  const parsed = contentPillarInputSchema.safeParse(input);
+  if (!parsed.success) return validationError(parsed.error);
+  try {
+    const { repo, current } = await editableContext();
+    const pillar = await repo.createContentPillar(current.organization.id, parsed.data);
+    refresh("/accounts");
+    return { ok: true, data: pillar };
+  } catch (error) {
+    return { ok: false, error: toUserMessage(error, "コンテンツの柱の追加に失敗しました") };
   }
 }
 

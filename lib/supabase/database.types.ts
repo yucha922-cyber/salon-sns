@@ -18,6 +18,7 @@ type Table<R extends Record<string, unknown>, Req extends keyof R> = {
   Relationships: [];
 };
 
+export type GoalEnum = "acquisition" | "recruitment" | "branding" | "engagement" | "retention" | "custom";
 export type OrganizationRoleEnum = "owner" | "admin" | "editor" | "viewer";
 export type SocialPlatformEnum = "instagram" | "threads" | "tiktok" | "facebook" | "x" | "youtube" | "line";
 export type PostStatusEnum = "draft" | "scheduled" | "published" | "failed";
@@ -138,7 +139,9 @@ export type SocialAccountRow = Timestamps & {
   external_account_id: string | null;
   is_brand_default: boolean;
   display_name: string;
-  goal: "acquisition" | "recruitment" | "branding";
+  goal: GoalEnum;
+  custom_goal: string;
+  active: boolean;
 };
 
 export type AccountStrategyRow = Timestamps & {
@@ -152,6 +155,11 @@ export type AccountStrategyRow = Timestamps & {
   posting_frequency_note: string;
   cta: string;
   tone: string;
+  target_audience: string;
+  kpi_targets: Json;
+  preferred_posting_days: number[];
+  preferred_posting_times: string[];
+  notes: string;
 };
 
 export type LocationProfileRow = Timestamps & {
@@ -180,7 +188,13 @@ export type HqCampaignRow = Timestamps & {
   organization_id: string;
   brand_id: string | null;
   name: string;
-  status: "draft" | "active" | "ended";
+  status: "draft" | "active" | "completed" | "archived";
+  goal: GoalEnum;
+  target_platforms: string[];
+  content_directions: string[];
+  required_messages: string[];
+  optional_messages: string[];
+  cta: string;
   starts_on: string | null;
   ends_on: string | null;
   shared_theme: string;
@@ -210,6 +224,82 @@ export type PostRow = Timestamps & {
   created_by: string | null;
   social_account_id: string | null;
   hq_campaign_id: string | null;
+  theme: string;
+  hook: string;
+  summary: string;
+  goal: string | null;
+  target: string;
+  content_pillar: string;
+  funnel_stage: string;
+  plan_proposal_item_id: string | null;
+};
+
+export type ContentPillarRow = Timestamps & {
+  id: string;
+  organization_id: string | null;
+  goal: GoalEnum;
+  key: string;
+  label: string;
+  description: string;
+  sort_order: number;
+};
+
+export type AiPlanProposalRow = Timestamps & {
+  id: string;
+  organization_id: string;
+  social_account_id: string;
+  location_id: string | null;
+  hq_campaign_id: string | null;
+  month: string;
+  goal: string;
+  summary: string;
+  ai_provider: string | null;
+  status: "pending" | "partially_approved" | "approved" | "rejected";
+  created_by: string | null;
+};
+
+export type AiPlanProposalItemRow = Timestamps & {
+  id: string;
+  organization_id: string;
+  proposal_id: string;
+  scheduled_date: string;
+  scheduled_time: string;
+  platform: SocialPlatformEnum;
+  content_type: string;
+  theme: string;
+  hook: string;
+  summary: string;
+  goal: string;
+  target: string;
+  content_pillar: string;
+  funnel_stage: string;
+  cta: string;
+  status: "pending" | "approved" | "rejected";
+  post_id: string | null;
+  sort_order: number;
+};
+
+export type AiRecommendationRow = Timestamps & {
+  id: string;
+  organization_id: string;
+  brand_id: string | null;
+  category: "social" | "ads" | "creative" | "strategy" | "recruitment" | "acquisition";
+  title: string;
+  observation: string;
+  hypothesis: string;
+  recommended_action: string;
+  expected_impact: string;
+  status: "pending" | "approved" | "rejected" | "completed";
+  approved_by: string | null;
+  approved_at: string | null;
+  payload: Json | null;
+  location_id: string | null;
+  social_account_id: string | null;
+  severity: "low" | "medium" | "high";
+  insight: string;
+  confidence: number;
+  decided_by: string | null;
+  decided_at: string | null;
 };
 
 export type PostScheduleRow = Timestamps & {
@@ -263,6 +353,13 @@ export type Database = {
       location_profiles: Table<LocationProfileRow, "organization_id" | "location_id">;
       location_staff: Table<LocationStaffRow, "organization_id" | "location_id" | "name">;
       hq_campaigns: Table<HqCampaignRow, "organization_id" | "name">;
+      content_pillars: Table<ContentPillarRow, "goal" | "key" | "label">;
+      ai_plan_proposals: Table<AiPlanProposalRow, "organization_id" | "social_account_id" | "month" | "goal">;
+      ai_plan_proposal_items: Table<
+        AiPlanProposalItemRow,
+        "organization_id" | "proposal_id" | "scheduled_date" | "scheduled_time" | "platform" | "content_type" | "theme" | "goal"
+      >;
+      ai_recommendations: Table<AiRecommendationRow, "organization_id" | "category" | "title">;
     };
     Views: { [_ in never]: never };
     Functions: {

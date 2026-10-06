@@ -10,7 +10,18 @@ Sign up / Login → Organization作成 → Business Profile入力（6ステッ�
 → Dashboard → AI Marketing Chat → AI Post Creator → SNS Plannerへ保存
 ```
 
-複数店舗を持つ事業者向けに、**アカウント戦略**（集客・採用・ブランディング）、**本部テンプレート**（本部キャンペーンを各店舗向けにローカライズ）、**店舗カスタマイズ**（エリア・客層・スタッフ・オファー・ローカルキーワード）も備えています。
+「投稿を1件ずつ作るAIツール」ではなく、**本部が複数店舗のSNSアカウントをAIで企画・管理する運用プラットフォーム**を目指しています。
+
+```
+目的を設定（アカウント戦略）→ AIが運用戦略を提案（AI Account Strategist）
+→ AIが月間企画を作成（AIで1ヶ月分作成）→ 人が確認・承認（Human-in-the-loop）
+→ キャプション生成 → 投稿（※API連携は未実装）→ 結果分析 → 次回企画へ反映（AI Recommendation）
+```
+
+- **アカウント戦略**：SNSアカウントごとに目的（集客・採用・ブランディング・エンゲージメント・リピート・カスタム）とターゲット・KPI目標・コンテンツの柱・投稿頻度/曜日/時間・CTA戦略・トーンを設定
+- **本部 / 店舗の一括管理**：Organization → 本部アカウント + Location（店舗）→ 各SNSアカウント。ダッシュボードとカレンダーを「全店舗 / 店舗 / アカウント」で切り替え
+- **本部テンプレート**：月のテーマ・必須/任意メッセージ・ローカライズのルールを全店舗に配布し、店舗ごとにAIがローカライズ
+- **店舗カスタマイズ**：エリア・客層・スタッフ・オファー・ローカルキーワード
 
 外部SNS API（Instagram / Meta広告など）への接続と、広告の自動変更は **まだ行いません**。
 
@@ -79,17 +90,21 @@ middleware.ts    ルート保護
 
 ## Database schema
 
-`supabase/migrations/20261006000000_init.sql` と `20261007000000_accounts_hq_locations.sql`。全テーブル UUID 主キー・`created_at`/`updated_at`（トリガーで自動更新）。
+`supabase/migrations/` の3ファイル（`20261006000000_init.sql` → `20261007000000_accounts_hq_locations.sql` → `20261008000000_sns_operations_loop.sql` の順に適用）。全テーブル UUID 主キー・`created_at`/`updated_at`（トリガーで自動更新）。
 
 | 区分 | テーブル |
 |---|---|
 | ユーザー・組織 | `profiles`, `organizations`(`is_demo`), `organization_members`(role: owner/admin/editor/viewer) |
 | Brand Brain | `brands`, `business_profiles`, `locations`, `target_audiences`, `personas`, `services`, `competitors`, `brand_assets`, `social_accounts` |
-| SNS | `posts`(status: draft/scheduled/published/failed, `social_account_id`, `hq_campaign_id`), `post_schedules` |
-| アカウント戦略 | `social_accounts`(goal: acquisition/recruitment/branding, 店舗紐付け, 同一SNSに複数可), `account_strategies`(persona, kpis, content_pillars, posts_per_week, cta, tone) |
-| 本部・店舗 | `hq_campaigns`(共通テーマ・共通クリエイティブ・localization_rules・対象店舗), `location_profiles`(area, demographics, featured_services, offers, local_keywords), `location_staff` |
+| SNS Planner | `posts`(status: draft/scheduled/published/failed, `social_account_id`, `hq_campaign_id`, 企画項目 theme/hook/summary/goal/target/content_pillar/funnel_stage, `plan_proposal_item_id`), `post_schedules` |
+| アカウント戦略 | `social_accounts`(goal: acquisition/recruitment/branding/engagement/retention/custom, custom_goal, active, 店舗紐付け or 本部, 同一SNSに複数可), `account_strategies`(target_audience, persona, kpi_targets jsonb, content_pillars, posts_per_week, preferred_posting_days, preferred_posting_times, cta, tone, notes) |
+| Content Pillar | `content_pillars`(organization_id null = システム標準 / 組織のカスタム柱, goal別) |
+| 本部・店舗 | `hq_campaigns`(title, description, goal, 期間, target_location_ids, target_platforms, content_directions, required/optional_messages, cta, status: draft/active/completed/archived, 共通クリエイティブ, localization_rules), `location_profiles`, `location_staff` |
+| AI計画 | `ai_plan_proposals`(アカウント×月の企画案, status: pending/partially_approved/approved/rejected), `ai_plan_proposal_items`(日時・形式・テーマ・フック・概要・目的・ターゲット・柱・ファネル段階・CTA, status: pending/approved/rejected, 承認後の post_id) |
 | 広告 | `campaigns`, `ad_sets`, `ads`, `creatives`, `metrics` |
-| AI | `ai_recommendations`(承認ステータス), `ai_conversations`, `ai_messages` |
+| AI | `ai_recommendations`(location/social_account任意, category, severity, observation, insight, hypothesis, recommended_action, expected_impact, confidence, status: pending/approved/rejected/completed), `ai_conversations`, `ai_messages` |
+
+campaign_locations / campaign_social_accounts のような中間テーブルは作らず、`target_location_ids` / `target_platforms` 配列＋同一組織チェックのトリガーで扱っています（テーブルを増やしすぎないため）。
 
 RPC:
 - `create_organization(name, is_demo)` — 組織・owner権限・空のBrand Brainを原子的に作成
@@ -114,22 +129,26 @@ RPC:
 - テナントデータはすべて `organization_id` を持ち、RLS ポリシー `is_org_member()` / `can_edit_org()` で分離。
 - 子テーブルが別組織の親（brand / location / account / campaign / post / conversation）を参照できないよう、トリガーで同一組織を強制（本部キャンペーンの対象店舗も同様）。
 - 「現在の組織」Cookieは、ユーザーの所属組織の中から選ぶためだけに使い、権限の根拠にはしません。
-- `supabase/tests/rls_test.sql` / `rls_accounts_test.sql` で「他組織の閲覧・更新・挿入・Brand Brain保存・異組織への紐付け（店舗・アカウント・キャンペーン）」がすべて拒否されることを検証済み。
+- `supabase/tests/rls_test.sql` / `rls_accounts_test.sql` / `rls_operations_test.sql` で「他組織の閲覧・更新・挿入・Brand Brain保存・異組織への紐付け（店舗・アカウント・キャンペーン）」がすべて拒否されることを検証済み。
 
-## Account strategy / HQ template / Location customization
+## SNS operations loop（アカウント戦略 / 本部 / 月間計画）
 
 ```
-Brand Brain（ブランド共通の事実）
-  ├─ Account Strategy  … アカウントごとの目的（集客/採用/ブランディング）・ペルソナ・KPI・柱・頻度・CTA・トーン
-  ├─ Location Customization … 店舗ごとのエリア・客層・注力サービス・スタッフ・オファー・ローカルキーワード
-  └─ HQ Template … 本部キャンペーン・共通テーマ・共通クリエイティブ・ローカライズのルール
+Organization
+├ 本部（HQ）アカウント … locationId なし（例：採用Instagram・ブランドThreads）
+├ Location A（渋谷院）… Instagram（集客）/ Threads（集客）
+├ Location B（池袋院）… Instagram / Threads
+└ Location C（横浜院）… Instagram / Threads
 ```
 
-- **アカウント戦略**（`/accounts`）: 目的別にアカウントを管理。目的ごとのテンプレート適用、または「AIで提案」でBrand Brainと店舗情報から戦略を生成。
-- **店舗カスタマイズ**（`/locations`）: Brand Brainの各店舗に追加情報を設定。
-- **本部テンプレート**（`/hq`）: 共通テーマ・クリエイティブ・ルールを決め、「全店舗の下書きを生成」で対象店舗ごとにAIがローカライズした下書きを作成（各店舗の集客アカウントを自動選択、キャンペーン開始日20時に仮置き、人の確認後に予約）。
-- **AI投稿作成**: アカウント・本部キャンペーンを選ぶと、その戦略・店舗情報・ローカライズルールが自動で反映。
-- AIへの優先順位: Brand Brain（事実・表現ルール）＜ アカウント戦略 ＜ 店舗情報。ローカライズのルールは必ず守る制約として渡します。
+- **アカウント戦略**（`/accounts`）：店舗別ツリー / 目的別で表示。編集画面で目的・ターゲット・ペルソナ・KPI目標・コンテンツの柱（ライブラリ + カスタム）・投稿頻度/曜日/時間・CTA戦略・トーン・メモ・運用中/停止を設定。
+- **AI Account Strategist**：Brand Brain・店舗・業種・SNS・目的・既存戦略から、Goal / Target Persona / Primary・Secondary KPI / 推奨Content Pillars / 投稿頻度・曜日・時間 / CTA戦略 / Tone / Monthly Content Mix / Risks / Suggestions を構造化出力（zod検証）。**提案をフォームに適用してから人が保存**します。
+- **AIで1ヶ月分作成**（`/planner`）：投稿枠はコードが「週あたり投稿数 × 優先曜日・時間」から算出（例：Instagram週4本、Threads週5本）。AIは各枠に企画（形式・テーマ・フック・概要・ターゲット・柱・CTA）を入れます。結果はまず **AI Proposal**（`/planner/proposals/[id]`）として表示し、すべて承認 / 個別承認 / 却下 / 編集 / 再生成ができ、**承認した企画だけ**が投稿カレンダーに「企画」として入ります。そこから「AIでキャプションを作成」で本文を作り、予約します。
+- **集客と採用は別ロジック**：集客は「認知→悩み→教育→信頼→来店→予約」、採用は「認知→興味→共感→職場理解→キャリア理解→応募」。プロンプトのルール・使える形式（採用では Before/After・口コミ・オファーを使わない）・モックの企画バンクも完全に分けています。月の前半は上流、後半はコンバージョンに近い段階を割り当てます。
+- **本部テンプレート**（`/hq`）：「今月は全店舗で肩こり訴求」のような本部テーマを、対象店舗・対象SNSへ配布。月間計画で本部テーマを選ぶか、「全店舗の下書きを生成」で店舗×SNSごとにローカライズ（渋谷院=渋谷勤務の女性、池袋院=池袋勤務の会社員、横浜院=地域住民）。必須メッセージは必ず含めます。
+- **Dashboard**：「全店舗 / 店舗 / アカウント」切替。運用店舗数・運用アカウント数・集客/採用アカウント数・今月の予定/承認済み/下書き投稿数・店舗別ステータス（投稿頻度に対する計画進捗）・AI Recommendation・本部キャンペーン。
+- **AI Recommendation**（`/analysis`・Dashboard）：「AIで運用レビュー」で計画状況から改善案（観測→示唆→仮説→推奨アクション）を作成。人が承認・却下・完了にします。承認しても自動では何も実行しません。
+- AIへの優先順位: Brand Brain（事実・表現ルール）＜ アカウント戦略 ＜ 店舗情報。本部の必須メッセージとローカライズのルールは必ず守る制約として渡します。
 
 ## Brand Brain architecture
 
@@ -146,10 +165,13 @@ lib/ai/
   anthropic.ts       Anthropic SDK（構造化出力 + サーバー側リフューザルフォールバック）
   openai.ts          OpenAI Chat Completions（json_schema）
   mock.ts            APIキーなしで動くMock（各機能のBrand Brain連動モック）
-  schemas.ts         AI出力のzodスキーマ（投稿・広告コンセプト・広告分析）
+  schemas.ts         AI出力のzodスキーマ（投稿・Account Strategist・月間計画・運用レビュー・広告コンセプト・広告分析）
   prompts/
-    marketing-chat.ts  post-creator.ts（本部ローカライズにも使用）  account-strategy.ts
-    creative-studio.ts  ad-analysis.ts
+    marketing-chat.ts   post-creator.ts（本部ローカライズにも使用）
+    account-strategy.ts（AI Account Strategist）  monthly-plan.ts（集客/採用で別ルール）
+    operations-review.ts（AI Recommendation）  creative-studio.ts  ad-analysis.ts
+lib/planning/slots.ts  投稿頻度・曜日・時間から月の投稿枠とファネル段階を決定（AIは枠を変えない）
+lib/services/planning.ts  提案 → 承認/却下/編集/再生成 → 承認分だけ投稿化
 ```
 
 - Provider選択：`AI_PROVIDER`（`anthropic` / `openai` / `mock`）。未指定ならキーがあるものを自動選択、なければ Mock。Anthropic のデフォルトモデルは `claude-opus-5-5`（`ANTHROPIC_MODEL` で変更可）。
@@ -196,7 +218,7 @@ cat supabase/tests/auth_stub.sql supabase/migrations/*.sql supabase/tests/rls_te
 ## Demo mode
 
 - Supabase未設定時は **Demoモード**：サーバー内メモリ（開発時は `.demo-data/store.json` に保存）＋署名付きCookie認証。全フローが動作します。
-- デモ組織には渋谷院・新宿院の2店舗、4つのアカウント（本部ブランディング・渋谷集客・新宿集客・採用）、店舗カスタマイズ、本部キャンペーン「秋の姿勢改善キャンペーン」が入っています。
+- デモ組織 **NAORU Demo HQ**：渋谷院・池袋院・横浜院の3店舗。各店舗に Instagram + Threads（渋谷院Instagram＝集客／30代女性・渋谷勤務・デスクワーク、横浜院Threads＝リピート）、本部に採用Instagram（20〜30代 PT・柔道整復師・セラピスト）とブランドThreads。店舗カスタマイズ、今月の本部テーマ「デスクワーク×姿勢改善」、承認待ちのAI Recommendationも入っています。
 - ログイン画面の「デモアカウントで試す」で、デモ組織 **NAORU整体 渋谷院**（整体 / Healthcare / Wellness、30代女性・渋谷勤務のデスクワーカー、肩こり・首こり・姿勢・仕事終わりの疲れ、清潔感・専門性・都会的・親しみやすい）にすぐ入れます。
 - 新規ユーザーもオンボーディングやサイドバーから「デモ組織」を追加できます（Supabaseモードでも可）。
 - デモ組織は `organizations.is_demo = true`。SNSリーチや広告成果などのモック数値は **デモ組織にだけ** 表示し、本番組織には未連携の空状態を表示します。
@@ -212,8 +234,11 @@ cat supabase/tests/auth_stub.sql supabase/migrations/*.sql supabase/tests/rls_te
 - AI投稿作成（platform / 形式 / テーマ / ターゲット / 目的 / トーン → タイトル・キャプション・CTA・ハッシュタグ生成 → 編集 → 予約/下書きで SNS Planner に保存）
 - 投稿カレンダー（月移動・SNS絞り込み・日付から作成・投稿編集）、投稿一覧（ステータス別）
 - Creative Studio（Brand Brainから4つの広告コンセプトを生成）
-- アカウント戦略（集客・採用・ブランディング別、ペルソナ・KPI・柱・頻度・CTA・トーン、テンプレート適用・AI提案）
-- 本部テンプレート（本部キャンペーン・共通テーマ・共通クリエイティブ・ローカライズルール・対象店舗、全店舗分の下書きを一括生成）
+- アカウント戦略（6つの目的、ターゲット・ペルソナ・KPI目標・コンテンツの柱ライブラリ・頻度/曜日/時間・CTA戦略・トーン・メモ・運用中/停止、店舗別ツリー/目的別表示）
+- AI Account Strategist（構造化出力・提案の適用）
+- AIで1ヶ月分作成 → AI Proposal 確認（すべて承認・個別承認・却下・編集・再生成）→ 承認分だけ投稿カレンダーへ → キャプション作成
+- 本部テンプレート（目的・対象店舗・対象SNS・コンテンツ方針・必須/任意メッセージ・CTA・ステータス、店舗×SNSごとの下書き一括生成）
+- ダッシュボードの本部運用ビュー（全店舗/店舗/アカウント切替、店舗別ステータス、AI Recommendation の承認）
 - 店舗カスタマイズ（エリア・客層・注力サービス・スタッフ・オファー・ローカルキーワード）
 - 広告ダッシュボード / AI分析（デモ組織のみデータ表示、AI再分析、承認UIは記録のみで広告は変更しない）
 - Loading（Skeleton）/ Empty / Error state、Toast、フォームバリデーション、Disabled state
@@ -223,7 +248,8 @@ cat supabase/tests/auth_stub.sql supabase/migrations/*.sql supabase/tests/rls_te
 - SNS・広告アカウントのOAuth連携、投稿の自動公開、インサイト・広告実績の同期
 - 参考素材アップロード（Supabase Storage）、画像・動画生成
 - メンバー招待・権限管理UI（店舗スタッフに担当店舗だけを編集させる店舗単位の権限）、通知、プラン・請求
-- 本部キャンペーンの承認フロー（店舗の下書き → 本部承認 → 予約）、KPIの実績計測（SNS連携後）
+- 本部キャンペーンの承認フロー（店舗の下書き → 本部承認 → 予約）、KPIの実績計測と「結果分析 → 次回企画へ反映」の自動化（SNS連携後）
+- 承認済みRecommendationの実行（例：自動で計画を作り直す）。現状は人が実行して完了にします
 - AI応答のストリーミング、AI利用量の上限・レート制限
 - パスワードリセット、ソーシャルログイン
 

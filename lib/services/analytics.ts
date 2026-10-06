@@ -1,6 +1,6 @@
 import "server-only";
-import type { Campaign, MetricSummary, Organization, Post, Recommendation } from "@/lib/domain/types";
-import { DEMO_AD_METRICS, DEMO_CAMPAIGNS, DEMO_METRICS, DEMO_RECOMMENDATIONS } from "@/lib/demo/seed";
+import type { Campaign, MetricSummary, Organization, Post } from "@/lib/domain/types";
+import { DEMO_AD_METRICS, DEMO_CAMPAIGNS, DEMO_METRICS } from "@/lib/demo/seed";
 
 /**
  * Analytics read model. External SNS / ad APIs are not connected yet, so:
@@ -32,8 +32,4 @@ export function getAdMetrics(org: Organization): MetricSummary[] | null {
 
 export function getCampaigns(org: Organization): Campaign[] {
   return org.isDemo ? DEMO_CAMPAIGNS : [];
-}
-
-export function getRecommendations(org: Organization): Recommendation[] {
-  return org.isDemo ? DEMO_RECOMMENDATIONS : [];
 }

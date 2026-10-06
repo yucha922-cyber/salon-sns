@@ -7,7 +7,8 @@ import { brandBrainInputSchema } from "@/lib/domain/schemas";
 describe("buildBrandContext", () => {
   it("structures every Brand Brain section for the AI", () => {
     const ctx = buildBrandContext(DEMO_BRAND_BRAIN);
-    expect(ctx.brand.name).toBe("NAORU整体 渋谷院");
+    expect(ctx.brand.name).toBe("NAORU整体");
+    expect(ctx.locations).toHaveLength(3);
     expect(ctx.industry.guidance).toContain("断定");
     expect(ctx.painPoints).toContain("肩こり");
     expect(ctx.services).toHaveLength(3);

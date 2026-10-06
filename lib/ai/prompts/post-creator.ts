@@ -85,10 +85,11 @@ export function buildPostCreatorRequest(
             "",
             `${locationName}では「${strength}」を大切に、一人ひとりに合わせたケアをご提案しています。`,
             ...(staff ? [`担当：${staff.name}${staff.role ? `（${staff.role}）` : ""}`] : []),
+            ...(campaign?.requiredMessages.length ? ["", ...campaign.requiredMessages.map((m) => `✔ ${m}`)] : []),
             ...(offer ? ["", `🎁 ${locationName}限定：${offer}`] : []),
           ];
       const caption = isShort
-        ? `${target}の方、「${pain}」が気になっていませんか？\n${input.theme}について、${locationName}がやさしく解説します。`
+        ? `${target}の方、「${pain}」が気になっていませんか？\n${input.theme}について、${locationName}がやさしく解説します。${campaign?.requiredMessages[0] ? `\n✔ ${campaign.requiredMessages[0]}` : ""}`
         : body.join("\n");
       const localTags = (location?.localKeywords ?? []).map((k) => (k.startsWith("#") ? k : `#${k}`));
       const hashtags = isShort
@@ -99,6 +100,7 @@ export function buildPostCreatorRequest(
         caption,
         cta:
           account?.strategy.cta ||
+          campaign?.cta ||
           (input.goal.includes("予約") || input.goal.includes("来店") ? "ご予約はプロフィールのリンクからどうぞ" : "保存して、あとで見返してくださいね"),
         hashtags: hashtags.filter((tag, i, all) => tag.length > 1 && all.indexOf(tag) === i).slice(0, 10),
       };

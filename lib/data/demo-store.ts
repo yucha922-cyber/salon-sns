@@ -11,6 +11,9 @@ import type {
   OrganizationRole,
   Post,
   SnsAccount,
+  ContentPillar,
+  PlanProposal,
+  Recommendation,
 } from "@/lib/domain/types";
 
 /**
@@ -46,6 +49,9 @@ export interface DemoStoreData {
   accounts?: (SnsAccount & { organizationId: ID })[];
   locationProfiles?: (LocationProfileInput & { organizationId: ID; locationId: ID })[];
   hqCampaigns?: (HqCampaign & { organizationId: ID })[];
+  contentPillars?: (ContentPillar & { organizationId: ID })[];
+  planProposals?: (PlanProposal & { organizationId: ID })[];
+  recommendations?: Recommendation[];
 }
 
 const FILE = path.join(process.cwd(), ".demo-data", "store.json");
@@ -73,6 +79,9 @@ export function getDemoStore(): Required<DemoStoreData> {
   store.accounts ??= [];
   store.locationProfiles ??= [];
   store.hqCampaigns ??= [];
+  store.contentPillars ??= [];
+  store.planProposals ??= [];
+  store.recommendations ??= [];
   return store as Required<DemoStoreData>;
 }
 

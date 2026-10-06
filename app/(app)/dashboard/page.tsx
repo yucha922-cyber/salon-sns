@@ -9,6 +9,10 @@ import { MetricCard } from "@/components/ui/metric-card";
 import { TrendChart } from "@/components/ui/chart";
 import { EmptyState } from "@/components/ui/states";
 import { PostRow } from "@/components/posts/post-row";
+import { ScopeSelect } from "@/components/planning/scope-select";
+import { RecommendationList } from "@/components/recommendations/recommendation-list";
+import { computeOperationsOverview, parseScope } from "@/lib/services/operations";
+import { goalLabel, PLATFORM_LABELS } from "@/lib/domain/labels";
 
 function greeting(hour: number) {
   if (hour < 11) return "おはようございます";
@@ -16,10 +20,27 @@ function greeting(hour: number) {
   return "こんばんは";
 }
 
-export default async function DashboardPage() {
+export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ scope?: string }> }) {
   const { user, repo, current, brain } = await requireAppContext();
   const org = current.organization;
-  const posts = await repo.listPosts(org.id);
+  const scopeParam = (await searchParams).scope ?? "all";
+  const scope = parseScope(scopeParam);
+  const [allPosts, accounts, locationProfiles, hqCampaigns, recommendations] = await Promise.all([
+    repo.listPosts(org.id),
+    repo.listAccounts(org.id),
+    repo.listLocationProfiles(org.id),
+    repo.listHqCampaigns(org.id),
+    repo.listRecommendations(org.id),
+  ]);
+  const ops = computeOperationsOverview({ accounts, locations: locationProfiles, posts: allPosts, campaigns: hqCampaigns }, scope);
+  const posts = allPosts.filter(
+    (p) => scope.kind === "all" || (scope.kind === "location" ? p.locationId === scope.id : p.accountId === scope.id),
+  );
+  const scopedRecommendations = recommendations.filter(
+    (r) => scope.kind === "all" || (scope.kind === "location" ? r.locationId === scope.id : r.socialAccountId === scope.id),
+  );
+  const accountLabels = Object.fromEntries(accounts.map((a) => [a.id, a.handle]));
+  const locations = locationProfiles.map((l) => ({ id: l.locationId, name: l.locationName }));
   const metrics = getDashboardMetrics(org, posts);
   const campaigns = getCampaigns(org).slice(0, 3);
   const upcoming = upcomingPosts(posts);
@@ -45,6 +66,72 @@ export default async function DashboardPage() {
           </>
         }
       />
+
+      <ScopeSelect value={scopeParam} locations={locations} accounts={accounts} />
+      <section className="ops-grid" aria-label="本部運用サマリー">
+        {[
+          ["運用店舗", `${ops.activeLocations}`],
+          ["運用アカウント", `${ops.activeAccounts}`],
+          ["集客アカウント", `${ops.acquisitionAccounts}`],
+          ["採用アカウント", `${ops.recruitmentAccounts}`],
+          ["今月の予定投稿", `${ops.plannedThisMonth}本`],
+          ["予約済み（承認済）", `${ops.approvedThisMonth}本`],
+          ["下書き・企画", `${ops.draftThisMonth}本`],
+        ].map(([label, value]) => (
+          <div className="ops-card" key={label}><span>{label}</span><b>{value}</b></div>
+        ))}
+      </section>
+      <section className="content-grid" style={{ marginTop: 0, marginBottom: 16 }}>
+        <div className="panel">
+          <div className="panel-heading">
+            <div><div className="panel-title">店舗別ステータス</div><div className="panel-subtitle">{ops.month.replace("-", "年")}月の計画状況（アカウント戦略の投稿頻度に対する予定本数）</div></div>
+            <Link className="button small" href={`/planner${scopeParam !== "all" ? `?scope=${scopeParam}` : ""}`}>計画を見る →</Link>
+          </div>
+          <div className="table-wrap">
+            <table className="data-table">
+              <thead><tr><th>店舗 / アカウント</th><th>目的</th><th>予定 / 目標</th><th>計画進捗</th><th>下書き</th></tr></thead>
+              <tbody>
+                {ops.locations.flatMap((loc) => [
+                  <tr key={`loc-${loc.locationId ?? "hq"}`}>
+                    <td><b>{loc.name}</b></td><td className="table-muted">{loc.accounts.length}アカウント</td>
+                    <td className="table-strong">{loc.planned} / {loc.monthlyTarget}</td>
+                    <td><div className="coverage-bar"><i className={loc.monthlyTarget && loc.planned / loc.monthlyTarget < 0.5 ? "low" : ""} style={{ width: `${Math.min(100, loc.monthlyTarget ? (loc.planned / loc.monthlyTarget) * 100 : 100)}%` }} /></div></td>
+                    <td className="table-muted">{loc.drafts}</td>
+                  </tr>,
+                  ...loc.accounts.map((s) => (
+                    <tr key={s.account.id}>
+                      <td className="table-muted">└ {PLATFORM_LABELS[s.account.platform]} {s.account.handle}{s.account.active ? "" : "（停止中）"}</td>
+                      <td><span className={`goal-pill ${s.account.goal}`}>{goalLabel(s.account.goal, s.account.customGoal)}</span></td>
+                      <td>{s.planned} / {s.monthlyTarget}</td>
+                      <td><div className="coverage-bar"><i className={s.coverage < 0.5 ? "low" : ""} style={{ width: `${Math.min(100, s.coverage * 100)}%` }} /></div></td>
+                      <td className="table-muted">{s.drafts}</td>
+                    </tr>
+                  )),
+                ])}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div className="panel">
+          <div className="panel-heading">
+            <div><div className="panel-title">✳ AI Recommendation</div><div className="panel-subtitle">承認待ちの改善提案</div></div>
+            <Link className="button small" href="/analysis">すべて見る →</Link>
+          </div>
+          <RecommendationList recommendations={scopedRecommendations} accountLabels={accountLabels} readOnly={current.role === "viewer"} compact limit={3} />
+          <div className="panel-title" style={{ margin: "14px 0 6px" }}>本部キャンペーン</div>
+          {ops.activeCampaigns.length ? (
+            ops.activeCampaigns.slice(0, 2).map((c) => (
+              <div className="campaign-row" key={c.id}>
+                <span className="campaign-indicator" />
+                <div className="row-main"><b>{c.name}</b><small>{c.startsOn ?? ""}〜{c.endsOn ?? ""} · {c.targetLocationIds.length ? `${c.targetLocationIds.length}店舗` : "全店舗"}</small></div>
+                <Link className="button small" href="/hq">詳細</Link>
+              </div>
+            ))
+          ) : (
+            <p className="activity-note">実施中の本部キャンペーンはありません。<Link className="link-button" href="/hq">作成する</Link></p>
+          )}
+        </div>
+      </section>
 
       <section className="metric-grid">
         {metrics.sns.map((m) => (

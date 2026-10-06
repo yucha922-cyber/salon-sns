@@ -45,6 +45,7 @@ export async function updatePostAction(input: unknown): Promise<ActionResult<Pos
   }
   try {
     const { repo, current } = await requireAppContext();
+    if (current.role === "viewer") return { ok: false, error: "閲覧権限のため保存できません" };
     const post = await repo.updatePost(current.organization.id, id, patch);
     revalidatePath("/planner");
     revalidatePath("/posts");
