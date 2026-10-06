@@ -106,3 +106,38 @@ export const operationsReviewSchema = z.object({
     .max(8),
 });
 export type OperationsReviewOutput = z.infer<typeof operationsReviewSchema>;
+
+/** AI Performance Review of one published post (Plan → … → Analyze → Learn). */
+export const performanceReviewSchema = z.object({
+  summary: z.string().min(1).max(500),
+  whatWorked: z.array(z.string().max(200)).max(5),
+  whatDidNotWork: z.array(z.string().max(200)).max(5),
+  possibleReasons: z.array(z.string().max(200)).max(5),
+  keyLearning: z.string().max(300),
+  recommendedNextAction: z.string().max(300),
+  nextCreativeHypothesis: z.string().max(300),
+  confidence: z.number().min(0).max(1),
+  /** Marketing Memory entry (null when the data is too thin to learn from). */
+  learning: z
+    .object({
+      learning: z.string().min(1).max(300),
+      hypothesis: z.string().max(300),
+      result: z.string().max(300),
+      contentPillar: z.string().max(60),
+    })
+    .nullable(),
+  /** Optional next-step proposal for humans to approve. */
+  recommendation: z
+    .object({
+      severity: z.enum(["low", "medium", "high"]),
+      title: z.string().max(120),
+      observation: z.string().max(400),
+      insight: z.string().max(400),
+      hypothesis: z.string().max(400),
+      recommendedAction: z.string().max(400),
+      expectedImpact: z.string().max(200),
+      confidence: z.number().min(0).max(1),
+    })
+    .nullable(),
+});
+export type PerformanceReviewOutput = z.infer<typeof performanceReviewSchema>;

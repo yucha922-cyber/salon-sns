@@ -1,5 +1,7 @@
 "use client";
 
+import { DEFAULT_TIMEZONE, isoToZonedLocal, zonedLocalToIso } from "@/lib/domain/timezone";
+
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import type { ContentType, PostStatus, SocialPlatform } from "@/lib/domain/types";
@@ -61,6 +63,9 @@ export interface CreatorDefaults {
   } | null;
 }
 
+
+/** YYYY-MM of an instant in the organization timezone (planner month). */
+const monthOf = (iso: string | null) => isoToZonedLocal(iso ?? new Date().toISOString(), DEFAULT_TIMEZONE).slice(0, 7);
 
 export function PostCreator({ defaults }: { defaults: CreatorDefaults }) {
   const router = useRouter();
@@ -150,15 +155,14 @@ export function PostCreator({ defaults }: { defaults: CreatorDefaults }) {
           cta: draft.cta,
           hashtags: draft.hashtags.split(/[\s,、]+/).filter(Boolean).map((h) => (h.startsWith("#") ? h : `#${h}`)),
           status,
-          scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : null,
+          scheduledAt: scheduledAt ? zonedLocalToIso(scheduledAt, DEFAULT_TIMEZONE) : null,
         });
         if (!updated.ok) {
           setError(updated.error);
           return toast(updated.error, "error");
         }
         toast(status === "scheduled" ? "キャプションを保存し、予約しました" : "キャプションを保存しました");
-        const at = updated.data.scheduledAt ? new Date(updated.data.scheduledAt) : new Date();
-        router.push(`/planner?month=${at.getFullYear()}-${String(at.getMonth() + 1).padStart(2, "0")}&highlight=${updated.data.id}`);
+        router.push(`/planner?month=${monthOf(updated.data.scheduledAt)}&highlight=${updated.data.id}`);
         router.refresh();
         return;
       }
@@ -170,7 +174,7 @@ export function PostCreator({ defaults }: { defaults: CreatorDefaults }) {
         cta: draft.cta,
         hashtags: draft.hashtags.split(/[\s,、]+/).filter(Boolean),
         status,
-        scheduledAt: status === "scheduled" || scheduledAt ? new Date(scheduledAt).toISOString() : null,
+        scheduledAt: status === "scheduled" || scheduledAt ? zonedLocalToIso(scheduledAt, DEFAULT_TIMEZONE) : null,
         generationInput: { theme, target, goal, tone, notes },
         hook: draft.hook,
         ...scope,
@@ -181,8 +185,7 @@ export function PostCreator({ defaults }: { defaults: CreatorDefaults }) {
         return;
       }
       toast(status === "scheduled" ? "SNS Plannerに予約しました" : "下書きとしてSNS Plannerに追加しました");
-      const when = result.data.scheduledAt ? new Date(result.data.scheduledAt) : new Date();
-      router.push(`/planner?month=${when.getFullYear()}-${String(when.getMonth() + 1).padStart(2, "0")}&highlight=${result.data.id}`);
+      router.push(`/planner?month=${monthOf(result.data.scheduledAt)}&highlight=${result.data.id}`);
       router.refresh();
     });
   };

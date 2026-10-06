@@ -19,11 +19,15 @@ export interface Organization {
   name: string;
   isDemo: boolean;
   createdAt: string;
+  /** IANA timezone used for scheduling input/display (timestamps are stored in UTC). */
+  timezone: string;
 }
 
 export interface OrganizationMembership {
   organization: Organization;
   role: OrganizationRole;
+  /** null = all locations + HQ accounts; otherwise a location-scoped member (Location Manager). */
+  locationIds: ID[] | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -118,8 +122,16 @@ export interface BrandBrain extends BrandBrainInput {
 export const SOCIAL_PLATFORMS = ["instagram", "threads", "tiktok", "facebook"] as const;
 export type SocialPlatform = (typeof SOCIAL_PLATFORMS)[number];
 
-export const POST_STATUSES = ["draft", "scheduled", "published", "failed"] as const;
+/**
+ * Post lifecycle:
+ *   draft → scheduled(予定・計画承認済み) → approved(投稿内容を承認) → queued(Publish Queue)
+ *   → publishing → published | failed
+ * queued / publishing / (API) published are set by the publishing pipeline only.
+ */
+export const POST_STATUSES = ["draft", "scheduled", "approved", "queued", "publishing", "published", "failed"] as const;
 export type PostStatus = (typeof POST_STATUSES)[number];
+/** Statuses a user may set directly from the post editor. */
+export const EDITABLE_POST_STATUSES = ["draft", "scheduled", "published", "failed"] as const;
 
 export const CONTENT_TYPES = [
   "feed",
@@ -158,7 +170,27 @@ export interface Post {
   hqCampaignId: ID | null;
   /** Planning fields (filled by the AI monthly plan; empty for ad-hoc posts). */
   planning: PostPlanning;
+  /** Publishing results (set by the Publish Queue). */
+  publishing: PostPublishing;
 }
+
+export interface PostPublishing {
+  approvedAt: string | null;
+  approvedBy: ID | null;
+  publishedAt: string | null;
+  providerPostId: string | null;
+  permalink: string | null;
+  error: string | null;
+}
+
+export const EMPTY_PUBLISHING: PostPublishing = {
+  approvedAt: null,
+  approvedBy: null,
+  publishedAt: null,
+  providerPostId: null,
+  permalink: null,
+  error: null,
+};
 
 export interface PostPlanning {
   theme: string;
@@ -265,6 +297,10 @@ export interface RecommendationInput {
   expectedImpact: string;
   /** 0..1 */
   confidence: number;
+  /** operations = plan coverage review, performance = derived from real insights */
+  source?: "operations" | "performance" | "manual";
+  /** posts whose metrics back this recommendation */
+  sourcePostIds?: ID[];
 }
 
 /** AI proposes, a human approves / rejects / marks completed. */
@@ -325,7 +361,9 @@ export interface SnsAccount extends SnsAccountInput {
   id: ID;
   /** Created from the Brand Brain "SNS" section. */
   isBrandDefault: boolean;
-  connectionStatus: "manual" | "connected" | "expired" | "error";
+  connectionStatus: import("@/lib/social/types").ConnectionStatus;
+  /** Public connection info (no tokens). */
+  connection: import("@/lib/social/types").SocialConnectionInfo;
 }
 
 export interface ContentPillar {

@@ -9,6 +9,8 @@ import { RECOMMENDATION_STATUSES } from "@/lib/domain/types";
 import { validationError, type ActionResult } from "@/lib/actions";
 import { RepositoryError } from "@/lib/data/repository";
 import { toUserMessage } from "@/lib/services/errors";
+import { loadMarketingMemory } from "@/lib/social/memory";
+import { applyRecommendationDecision } from "@/lib/services/recommendations";
 import { approvePlanItems, editPlanItem, generateMonthlyPlan, regeneratePlanItem, rejectPlanItems } from "@/lib/services/planning";
 import { computeOperationsOverview } from "@/lib/services/operations";
 import { getAIProvider } from "@/lib/ai";
@@ -33,8 +35,12 @@ export async function generateMonthlyPlanAction(input: unknown): Promise<ActionR
   const parsed = generateMonthlyPlanSchema.safeParse(input);
   if (!parsed.success) return validationError(parsed.error);
   try {
-    const { repo, current, brain } = await editable();
-    const proposal = await generateMonthlyPlan(repo, current.organization.id, brain, parsed.data);
+    const app = await editable();
+    const { repo, current, brain } = app;
+    const account = (await repo.listAccounts(current.organization.id)).find((a) => a.id === parsed.data.accountId);
+    // Plan ← Learn: the Marketing Memory of this account / location feeds the next plan.
+    const memory = await loadMarketingMemory(app, { accountId: account?.id, locationId: account?.locationId, platform: account?.platform });
+    const proposal = await generateMonthlyPlan(repo, current.organization.id, brain, { ...parsed.data, memory });
     revalidatePath("/planner");
     return { ok: true, data: { proposalId: proposal.id, items: proposal.items.length } };
   } catch (error) {
@@ -131,8 +137,14 @@ export async function setRecommendationStatusAction(input: unknown): Promise<Act
   const parsed = z.object({ id: idSchema, status: z.enum(RECOMMENDATION_STATUSES) }).safeParse(input);
   if (!parsed.success) return validationError(parsed.error);
   try {
-    const { repo, current } = await editable();
+    const app = await editable();
+    const { repo, current } = app;
+    const before = (await repo.listRecommendations(current.organization.id)).find((r) => r.id === parsed.data.id);
     const rec = await repo.setRecommendationStatus(current.organization.id, parsed.data.id, parsed.data.status);
+    // Approve → Planner: only on the transition into "approved" (no duplicates).
+    if (before?.status !== rec.status && (rec.status === "approved" || rec.status === "rejected")) {
+      await applyRecommendationDecision(app, rec, rec.status).catch((error) => console.error("[recommendation] apply failed", error));
+    }
     revalidatePath("/", "layout");
     return { ok: true, data: rec };
   } catch (error) {

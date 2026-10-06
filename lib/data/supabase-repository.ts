@@ -33,6 +33,7 @@ import { customPillarKey } from "@/lib/brand/content-pillars";
 import { CONTENT_TYPES } from "@/lib/domain/types";
 import { sortPosts } from "@/lib/domain/posts";
 import type { ServerSupabaseClient } from "@/lib/supabase/server";
+import type { SocialConnectionInfo } from "@/lib/social/types";
 import type {
   AiPlanProposalItemRow,
   AiPlanProposalRow,
@@ -64,7 +65,7 @@ function fail(error: PostgrestError | null, context: string): void {
 }
 
 function toOrganization(row: OrganizationRow): Organization {
-  return { id: row.id, name: row.name, isDemo: row.is_demo, createdAt: row.created_at };
+  return { id: row.id, name: row.name, isDemo: row.is_demo, createdAt: row.created_at, timezone: row.timezone ?? "Asia/Tokyo" };
 }
 
 function toContentType(value: string): ContentType {
@@ -100,6 +101,32 @@ function toPost(row: PostRow, schedule: Pick<PostScheduleRow, "scheduled_at"> | 
       funnelStage: row.funnel_stage,
       planItemId: row.plan_proposal_item_id,
     },
+    publishing: {
+      approvedAt: row.approved_at,
+      approvedBy: row.approved_by,
+      publishedAt: row.published_at,
+      providerPostId: row.provider_post_id,
+      permalink: row.permalink,
+      error: row.publish_error,
+    },
+  };
+}
+
+export function toConnectionInfo(row: SocialAccountRow): SocialConnectionInfo {
+  const meta = row.provider_metadata && typeof row.provider_metadata === "object" && !Array.isArray(row.provider_metadata) ? row.provider_metadata : {};
+  return {
+    status: row.connection_status,
+    externalAccountId: row.external_account_id,
+    username: row.username ?? "",
+    profileImageUrl: row.profile_image_url,
+    tokenExpiresAt: row.token_expires_at,
+    scopes: row.scopes ?? [],
+    connectedAt: row.connected_at,
+    lastSyncedAt: row.last_synced_at,
+    error: row.connection_error,
+    metadata: Object.fromEntries(
+      Object.entries(meta).filter((e): e is [string, string | number | boolean | null] => ["string", "number", "boolean"].includes(typeof e[1]) || e[1] === null),
+    ),
   };
 }
 
@@ -169,6 +196,8 @@ function toRecommendation(row: AiRecommendationRow): Recommendation {
     confidence: Number(row.confidence),
     status: row.status,
     createdAt: row.created_at,
+    source: row.source ?? "operations",
+    sourcePostIds: row.source_post_ids ?? [],
   };
 }
 
@@ -199,6 +228,7 @@ function toAccount(row: SocialAccountRow, strategy: AccountStrategyRow | undefin
     active: row.active,
     isBrandDefault: row.is_brand_default,
     connectionStatus: row.connection_status,
+    connection: toConnectionInfo(row),
     strategy: {
       targetAudience: strategy?.target_audience ?? "",
       persona: strategy?.persona ?? "",
@@ -264,7 +294,7 @@ export class SupabaseRepository implements DataRepository {
   async listMemberships(): Promise<OrganizationMembership[]> {
     const { data: members, error } = await this.db
       .from("organization_members")
-      .select("organization_id, role")
+      .select("organization_id, role, location_ids")
       .eq("user_id", this.userId);
     fail(error, "listMemberships");
     if (!members?.length) return [];
@@ -280,6 +310,7 @@ export class SupabaseRepository implements DataRepository {
     return (orgs ?? []).map((row) => ({
       organization: toOrganization(row),
       role: members.find((m) => m.organization_id === row.id)?.role ?? "viewer",
+      locationIds: members.find((m) => m.organization_id === row.id)?.location_ids ?? null,
     }));
   }
 
@@ -461,7 +492,14 @@ export class SupabaseRepository implements DataRepository {
   async updatePost(organizationId: ID, postId: ID, patch: PostPatch): Promise<Post> {
     const { data: row, error } = await this.db
       .from("posts")
-      .update({ title: patch.title, caption: patch.caption, cta: patch.cta, hashtags: patch.hashtags, status: patch.status })
+      .update({
+        title: patch.title,
+        caption: patch.caption,
+        cta: patch.cta,
+        hashtags: patch.hashtags,
+        status: patch.status,
+        ...(patch.accountId !== undefined ? { social_account_id: patch.accountId, location_id: await this.accountLocation(organizationId, patch.accountId) } : {}),
+      })
       .eq("id", postId)
       .eq("organization_id", organizationId)
       .select("*")
@@ -489,6 +527,12 @@ export class SupabaseRepository implements DataRepository {
       .neq("status", "cancelled")
       .maybeSingle();
     return toPost(row, schedule ?? undefined);
+  }
+
+  private async accountLocation(organizationId: ID, accountId: ID | null): Promise<string | null> {
+    if (!accountId) return null;
+    const { data } = await this.db.from("social_accounts").select("location_id").eq("organization_id", organizationId).eq("id", accountId).maybeSingle();
+    return data?.location_id ?? null;
   }
 
   async listConversations(organizationId: ID): Promise<Omit<Conversation, "messages">[]> {
@@ -944,6 +988,8 @@ export class SupabaseRepository implements DataRepository {
           recommended_action: r.recommendedAction,
           expected_impact: r.expectedImpact,
           confidence: r.confidence,
+          source: r.source ?? "operations",
+          source_post_ids: r.sourcePostIds ?? [],
         })),
       )
       .select("*");

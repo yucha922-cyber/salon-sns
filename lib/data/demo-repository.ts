@@ -26,7 +26,8 @@ import type {
   RecommendationInput,
   RecommendationStatus,
 } from "@/lib/domain/types";
-import { EMPTY_PLANNING, SOCIAL_PLATFORMS } from "@/lib/domain/types";
+import { EMPTY_PLANNING, EMPTY_PUBLISHING, SOCIAL_PLATFORMS } from "@/lib/domain/types";
+import { emptyConnection } from "@/lib/social/connection";
 import { customPillarKey, SYSTEM_CONTENT_PILLARS } from "@/lib/brand/content-pillars";
 import { emptyBrandBrainInput } from "@/lib/brand/defaults";
 import { sortPosts } from "@/lib/domain/posts";
@@ -49,10 +50,16 @@ export class DemoRepository implements DataRepository {
   constructor(
     readonly userId: ID,
     private readonly idGen: () => ID = newId,
+    /** system = background worker (no session): skips the membership check, like the service role. */
+    private readonly options: { system?: boolean } = {},
   ) {}
 
   /** Tenant guard: equivalent of RLS for the in-memory store. */
   private assertMember(organizationId: ID, write = false): void {
+    if (this.options.system) {
+      if (!getDemoStore().organizations.some((o) => o.id === organizationId)) throw new RepositoryError("organization not found", "not_found");
+      return;
+    }
     const member = getDemoStore().members.find(
       (m) => m.organizationId === organizationId && m.userId === this.userId,
     );
@@ -66,7 +73,7 @@ export class DemoRepository implements DataRepository {
       .filter((m) => m.userId === this.userId)
       .flatMap((m) => {
         const organization = store.organizations.find((o) => o.id === m.organizationId);
-        return organization ? [{ organization, role: m.role }] : [];
+        return organization ? [{ organization: { ...organization, timezone: organization.timezone ?? "Asia/Tokyo" }, role: m.role, locationIds: m.locationIds ?? null }] : [];
       })
       .sort((a, b) => a.organization.createdAt.localeCompare(b.organization.createdAt));
   }
@@ -78,6 +85,7 @@ export class DemoRepository implements DataRepository {
       name: name.trim(),
       isDemo: options?.isDemo ?? false,
       createdAt: now(),
+      timezone: "Asia/Tokyo",
     };
     store.organizations.push(organization);
     store.members.push({ organizationId: organization.id, userId: this.userId, role: "owner" });
@@ -168,6 +176,7 @@ export class DemoRepository implements DataRepository {
       locationId: this.ownedOrNull(organizationId, "location", input.locationId),
       hqCampaignId: this.ownedOrNull(organizationId, "campaign", input.hqCampaignId),
       planning: { ...EMPTY_PLANNING, ...input.planning, planItemId: this.ownedPlanItemOrNull(organizationId, input.planning?.planItemId) },
+      publishing: { ...EMPTY_PUBLISHING },
     };
     getDemoStore().posts.push(post);
     persistDemoStore();
@@ -178,7 +187,18 @@ export class DemoRepository implements DataRepository {
     this.assertMember(organizationId, true);
     const post = getDemoStore().posts.find((p) => p.id === postId && p.organizationId === organizationId);
     if (!post) throw new RepositoryError("post not found", "not_found");
-    Object.assign(post, Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined)));
+    // Mirrors the posts_guard_publishing_state trigger: queued content is frozen.
+    if ((post.status === "queued" || post.status === "publishing") && Object.values(patch).some((v) => v !== undefined)) {
+      throw new RepositoryError("cancel the scheduled publish before editing", "forbidden");
+    }
+    if (patch.status === "queued" || patch.status === "publishing") throw new RepositoryError("publishing state is managed by the server", "forbidden");
+    const { accountId, ...rest } = patch;
+    Object.assign(post, Object.fromEntries(Object.entries(rest).filter(([, v]) => v !== undefined)));
+    if (accountId !== undefined) {
+      post.accountId = this.ownedOrNull(organizationId, "account", accountId);
+      const account = getDemoStore().accounts.find((a) => a.id === post.accountId);
+      if (account) post.locationId = account.locationId;
+    }
     persistDemoStore();
     return structuredClone(post);
   }
@@ -278,6 +298,7 @@ export class DemoRepository implements DataRepository {
           strategy: structuredClone({ ...EMPTY_STRATEGY, kpiTargets: [], contentPillars: [], preferredPostingDays: [], preferredPostingTimes: [] }),
           isBrandDefault: true,
           connectionStatus: "manual",
+          connection: emptyConnection(),
         });
       }
     }
@@ -303,8 +324,9 @@ export class DemoRepository implements DataRepository {
         locationId,
       });
     } else {
-      record = { ...structuredClone(input), locationId, id: this.idGen(), organizationId, isBrandDefault: false, connectionStatus: "manual" };
-      store.accounts.push(record);
+      const created = { ...structuredClone(input), locationId, id: this.idGen(), organizationId, isBrandDefault: false, connectionStatus: "manual" as const, connection: emptyConnection() };
+      store.accounts.push(created);
+      record = created;
     }
     persistDemoStore();
     const { organizationId: _org, ...account } = record;
@@ -512,7 +534,7 @@ export class DemoRepository implements DataRepository {
     const created = inputs.map((input) => {
       this.ownedOrNull(organizationId, "location", input.locationId);
       this.ownedOrNull(organizationId, "account", input.socialAccountId);
-      const rec: Recommendation = { ...structuredClone(input), id: this.idGen(), organizationId, status: "pending", createdAt: now() };
+      const rec: Recommendation = { source: "operations", sourcePostIds: [], ...structuredClone(input), id: this.idGen(), organizationId, status: "pending", createdAt: now() };
       return rec;
     });
     getDemoStore().recommendations.push(...created);

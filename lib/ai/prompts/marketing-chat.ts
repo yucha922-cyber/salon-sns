@@ -1,4 +1,5 @@
 import type { BrandBrainInput } from "@/lib/domain/types";
+import type { ContentLearning } from "@/lib/social/types";
 import type { AIChatTurn, GenerateTextRequest } from "../provider";
 import { brandSystemBlock, first, SAFETY_RULES } from "./shared";
 
@@ -10,6 +11,7 @@ export function buildMarketingChatRequest(
   brain: BrandBrainInput,
   history: AIChatTurn[],
   portfolio = "",
+  memory: ContentLearning[] = [],
 ): GenerateTextRequest {
   const { ctx, text } = brandSystemBlock(brain);
   const system = [
@@ -20,6 +22,7 @@ export function buildMarketingChatRequest(
     "- 日本語で、見出しや箇条書きを使い簡潔に。最後に次の一手を1つ提案する。",
     "- 投稿化したい案は「AI投稿作成」で作成・保存できることを必要に応じて案内する。",
     "- 複数アカウント・店舗がある場合は、どのアカウント（目的: 集客/採用/ブランディング）・どの店舗向けの提案かを明示する。",
+    "- Marketing Memory（実際の運用データからの学び）がある場合は、根拠として引用しつつ提案に反映する。",
     SAFETY_RULES,
     "",
     text,
@@ -27,7 +30,16 @@ export function buildMarketingChatRequest(
   ].join("\n");
 
   const lastUser = [...history].reverse().find((m) => m.role === "user")?.content ?? "";
-  return { system, messages: history, maxTokens: 4000, mockResponse: () => mockChatAnswer(brain, lastUser) };
+  return {
+    system,
+    messages: history,
+    maxTokens: 4000,
+    mockResponse: () => {
+      const answer = mockChatAnswer(brain, lastUser);
+      const top = memory[0];
+      return top ? `${answer}\n\n📌 Marketing Memory（実際の運用データからの学び）: ${top.learning}（確度${Math.round(top.confidence * 100)}%）。この傾向も踏まえて配分を決めましょう。` : answer;
+    },
+  };
 }
 
 function mockChatAnswer(brain: BrandBrainInput, question: string): string {

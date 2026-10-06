@@ -2,6 +2,7 @@ import "server-only";
 import type { DataRepository } from "@/lib/data/repository";
 import { RepositoryError } from "@/lib/data/repository";
 import type { BrandBrain, PlanItem, PlanProposal, PlanProposalStatus } from "@/lib/domain/types";
+import type { ContentLearning } from "@/lib/social/types";
 import { jstDateKey } from "@/lib/domain/dates";
 import { getAIProvider } from "@/lib/ai";
 import {
@@ -24,7 +25,7 @@ async function planContext(
   repo: DataRepository,
   organizationId: string,
   brain: BrandBrain,
-  opts: { accountId: string; month: string; hqCampaignId: string | null; notes: string },
+  opts: { accountId: string; month: string; hqCampaignId: string | null; notes: string; memory?: ContentLearning[] },
 ): Promise<MonthlyPlanContext> {
   const [accounts, locations, campaigns, pillars] = await Promise.all([
     repo.listAccounts(organizationId),
@@ -61,6 +62,7 @@ async function planContext(
     slots,
     month: opts.month,
     notes: opts.notes,
+    memory: opts.memory ?? [],
   };
 }
 
@@ -68,7 +70,7 @@ export async function generateMonthlyPlan(
   repo: DataRepository,
   organizationId: string,
   brain: BrandBrain,
-  opts: { accountId: string; month: string; hqCampaignId: string | null; notes: string },
+  opts: { accountId: string; month: string; hqCampaignId: string | null; notes: string; memory?: ContentLearning[] },
 ): Promise<PlanProposal> {
   const ctx = await planContext(repo, organizationId, brain, opts);
   if (!ctx.slots.length) throw new RepositoryError("投稿頻度が0本、または対象月に投稿できる日がありません", "invalid");

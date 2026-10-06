@@ -31,7 +31,10 @@ export const CONTENT_TYPE_LABELS: Record<ContentType, string> = {
 
 export const POST_STATUS_LABELS: Record<PostStatus, string> = {
   draft: "下書き",
-  scheduled: "予約済み",
+  scheduled: "予定",
+  approved: "投稿承認済み",
+  queued: "予約投稿待ち",
+  publishing: "投稿中",
   published: "公開済み",
   failed: "失敗",
 };
@@ -40,6 +43,9 @@ export const POST_STATUS_LABELS: Record<PostStatus, string> = {
 export const POST_STATUS_PILL: Record<PostStatus, string> = {
   draft: "draft",
   scheduled: "",
+  approved: "approved",
+  queued: "queued",
+  publishing: "queued",
   published: "",
   failed: "failed",
 };

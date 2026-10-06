@@ -15,6 +15,7 @@ import type {
   SnsAccount,
   SocialPlatform,
 } from "@/lib/domain/types";
+import type { ContentLearning } from "@/lib/social/types";
 import { CONTENT_TYPE_LABELS, goalLabel, PLATFORM_LABELS } from "@/lib/domain/labels";
 import { formatScopeContext } from "@/lib/brand/context";
 import { FUNNELS } from "@/lib/brand/account-goals";
@@ -73,6 +74,8 @@ export interface MonthlyPlanContext {
   slots: PostingSlot[];
   month: string; // YYYY-MM
   notes: string;
+  /** Marketing Memory relevant to this account (learned from real metrics). */
+  memory?: ContentLearning[];
 }
 
 function systemPrompt(c: MonthlyPlanContext): string {
@@ -90,7 +93,8 @@ function systemPrompt(c: MonthlyPlanContext): string {
     SAFETY_RULES,
     "",
     text,
-    `\n${formatScopeContext({ account: c.account, location: c.location, campaign: c.campaign })}`,
+    `\n${formatScopeContext({ account: c.account, location: c.location, campaign: c.campaign, memory: c.memory })}`,
+    c.memory?.length ? "- Marketing Memoryの学び（確度の高いもの）を企画の配分・切り口に反映し、summaryの末尾に反映した学びを一言添える。" : "",
   ]
     .filter(Boolean)
     .join("\n");
@@ -115,7 +119,7 @@ export function buildMonthlyPlanRequest(c: MonthlyPlanContext): GenerateObjectRe
     schemaName: "monthly_plan",
     maxTokens: 16000,
     mockResponse: () => ({
-      summary: mockSummary(c),
+      summary: `${mockSummary(c)}${c.memory?.[0] ? ` Marketing Memoryの学び「${c.memory[0].learning}」を踏まえ、反応の良い型の比率を高めています。` : ""}`,
       items: c.slots.map((slot) => mockIdea(c, slot, 0)),
     }),
   };

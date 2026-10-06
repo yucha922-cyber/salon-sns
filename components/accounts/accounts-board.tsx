@@ -9,6 +9,7 @@ import { GOAL_PRESETS } from "@/lib/brand/account-goals";
 import { pillarLabel } from "@/lib/brand/content-pillars";
 import { EmptyState } from "@/components/ui/states";
 import { AccountEditor, newAccountInput, toAccountInput } from "./account-editor";
+import { ConnectionControls } from "@/components/social/connection-controls";
 
 type Editing = { account: SnsAccount | null; initial: SnsAccountInput };
 
@@ -18,12 +19,14 @@ export function AccountsBoard({
   pillars,
   postCounts,
   readOnly,
+  canManageConnections = false,
 }: {
   accounts: SnsAccount[];
   locations: { id: string; name: string }[];
   pillars: ContentPillar[];
   postCounts: Record<string, number>;
   readOnly: boolean;
+  canManageConnections?: boolean;
 }) {
   const [view, setView] = useState<"tree" | "goal">("tree");
   const [editing, setEditing] = useState<Editing | null>(null);
@@ -46,8 +49,8 @@ export function AccountsBoard({
         <span className="loc-pill">{locationName(a.locationId)}</span>
         <span className="loc-pill">週{a.strategy.postsPerWeek}本</span>
         {!a.active && <span className="status-pill draft">停止中</span>}
-        <span className="status-pill draft">API未連携</span>
       </div>
+      <ConnectionControls account={a} canManage={canManageConnections} />
       <div className="strategy-line"><b>ターゲット</b>{a.strategy.targetAudience || "未設定"}</div>
       <div className="strategy-line"><b>KPI</b>{a.strategy.kpiTargets.map((k) => (k.target === null ? k.metric : `${k.metric} ${k.target}${k.unit}`)).join("・") || "未設定"}</div>
       <div className="strategy-line"><b>柱</b>{a.strategy.contentPillars.map((p) => pillarLabel(p, pillars)).join("・") || "未設定"}</div>

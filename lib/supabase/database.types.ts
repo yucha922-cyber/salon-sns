@@ -21,7 +21,7 @@ type Table<R extends Record<string, unknown>, Req extends keyof R> = {
 export type GoalEnum = "acquisition" | "recruitment" | "branding" | "engagement" | "retention" | "custom";
 export type OrganizationRoleEnum = "owner" | "admin" | "editor" | "viewer";
 export type SocialPlatformEnum = "instagram" | "threads" | "tiktok" | "facebook" | "x" | "youtube" | "line";
-export type PostStatusEnum = "draft" | "scheduled" | "published" | "failed";
+export type PostStatusEnum = "draft" | "scheduled" | "approved" | "queued" | "publishing" | "published" | "failed";
 
 export type ProfileRow = Timestamps & {
   id: string;
@@ -35,6 +35,7 @@ export type OrganizationRow = Timestamps & {
   slug: string | null;
   is_demo: boolean;
   created_by: string | null;
+  timezone: string;
 };
 
 export type OrganizationMemberRow = Timestamps & {
@@ -42,6 +43,7 @@ export type OrganizationMemberRow = Timestamps & {
   organization_id: string;
   user_id: string;
   role: OrganizationRoleEnum;
+  location_ids: string[] | null;
 };
 
 export type BrandRow = Timestamps & {
@@ -135,8 +137,17 @@ export type SocialAccountRow = Timestamps & {
   location_id: string | null;
   platform: SocialPlatformEnum;
   handle: string;
-  connection_status: "manual" | "connected" | "expired" | "error";
+  connection_status: "manual" | "connected" | "expired" | "error" | "disconnected" | "reauthorization_required";
   external_account_id: string | null;
+  username: string;
+  profile_image_url: string | null;
+  token_expires_at: string | null;
+  scopes: string[];
+  connected_at: string | null;
+  connected_by: string | null;
+  last_synced_at: string | null;
+  connection_error: string | null;
+  provider_metadata: Json;
   is_brand_default: boolean;
   display_name: string;
   goal: GoalEnum;
@@ -232,6 +243,12 @@ export type PostRow = Timestamps & {
   content_pillar: string;
   funnel_stage: string;
   plan_proposal_item_id: string | null;
+  approved_by: string | null;
+  approved_at: string | null;
+  published_at: string | null;
+  provider_post_id: string | null;
+  permalink: string | null;
+  publish_error: string | null;
 };
 
 export type ContentPillarRow = Timestamps & {
@@ -300,6 +317,8 @@ export type AiRecommendationRow = Timestamps & {
   confidence: number;
   decided_by: string | null;
   decided_at: string | null;
+  source: "operations" | "performance" | "manual";
+  source_post_ids: string[];
 };
 
 export type PostScheduleRow = Timestamps & {
@@ -312,6 +331,149 @@ export type PostScheduleRow = Timestamps & {
   status: "pending" | "sent" | "failed" | "cancelled";
   published_at: string | null;
   error_message: string | null;
+};
+
+export type PublishablePlatformEnum = "instagram" | "threads";
+
+export type SocialAccountCredentialRow = Timestamps & {
+  social_account_id: string;
+  organization_id: string;
+  provider: SocialPlatformEnum;
+  external_account_id: string;
+  access_token_ciphertext: string;
+  token_expires_at: string | null;
+  scopes: string[];
+  last_refreshed_at: string | null;
+  refresh_failures: number;
+};
+
+export type SocialOauthPendingRow = {
+  id: string;
+  organization_id: string;
+  user_id: string;
+  provider: SocialPlatformEnum;
+  candidates: Json;
+  access_token_ciphertext: string;
+  token_expires_at: string | null;
+  scopes: string[];
+  expires_at: string;
+  consumed_at: string | null;
+  created_at: string;
+};
+
+export type MediaAssetRow = Timestamps & {
+  id: string;
+  organization_id: string;
+  location_id: string | null;
+  post_id: string | null;
+  storage_path: string;
+  kind: "image" | "video";
+  mime_type: string;
+  size_bytes: number;
+  width: number | null;
+  height: number | null;
+  duration_ms: number | null;
+  status: "pending" | "ready" | "failed";
+  sort_order: number;
+  created_by: string | null;
+};
+
+export type PublishJobRow = Timestamps & {
+  id: string;
+  organization_id: string;
+  location_id: string | null;
+  social_account_id: string;
+  post_id: string;
+  provider: SocialPlatformEnum;
+  publish_format: string;
+  mode: "scheduled" | "immediate";
+  scheduled_at: string;
+  status: "queued" | "publishing" | "retrying" | "published" | "failed" | "cancelled";
+  attempt_count: number;
+  max_attempts: number;
+  next_attempt_at: string;
+  locked_until: string | null;
+  content_snapshot: Json;
+  provider_container_id: string | null;
+  provider_post_id: string | null;
+  provider_permalink: string | null;
+  provider_response: Json | null;
+  last_error: string | null;
+  last_error_code: string | null;
+  published_at: string | null;
+  requested_by: string | null;
+};
+
+export type MetricSnapshotRow = {
+  id: string;
+  organization_id: string;
+  location_id: string | null;
+  social_account_id: string;
+  post_id: string | null;
+  provider: SocialPlatformEnum;
+  scope: "post" | "account";
+  provider_post_id: string | null;
+  captured_at: string;
+  hours_since_publish: number | null;
+  metrics: Json;
+  raw: Json;
+  created_at: string;
+};
+
+export type PostPerformanceReviewRow = {
+  id: string;
+  organization_id: string;
+  location_id: string | null;
+  social_account_id: string | null;
+  post_id: string;
+  snapshot_id: string | null;
+  summary: string;
+  what_worked: string[];
+  what_did_not_work: string[];
+  possible_reasons: string[];
+  key_learning: string;
+  recommended_next_action: string;
+  next_creative_hypothesis: string;
+  confidence: number;
+  ai_provider: string | null;
+  created_by: string | null;
+  created_at: string;
+};
+
+export type ContentLearningRow = Timestamps & {
+  id: string;
+  organization_id: string;
+  brand_id: string | null;
+  location_id: string | null;
+  social_account_id: string | null;
+  platform: SocialPlatformEnum | null;
+  goal: GoalEnum | null;
+  content_pillar: string;
+  hypothesis: string;
+  result: string;
+  learning: string;
+  confidence: number;
+  valid_from: string;
+  valid_until: string | null;
+  source_post_ids: string[];
+  source_review_id: string | null;
+  status: "active" | "archived";
+  created_by: string | null;
+};
+
+export type SocialEventLogRow = {
+  id: string;
+  organization_id: string;
+  location_id: string | null;
+  social_account_id: string | null;
+  post_id: string | null;
+  publish_job_id: string | null;
+  event_type: string;
+  level: "info" | "warn" | "error";
+  message: string;
+  details: Json;
+  actor_user_id: string | null;
+  created_at: string;
 };
 
 export type AiConversationRow = Timestamps & {
@@ -360,6 +522,20 @@ export type Database = {
         "organization_id" | "proposal_id" | "scheduled_date" | "scheduled_time" | "platform" | "content_type" | "theme" | "goal"
       >;
       ai_recommendations: Table<AiRecommendationRow, "organization_id" | "category" | "title">;
+      social_account_credentials: Table<
+        SocialAccountCredentialRow,
+        "social_account_id" | "organization_id" | "provider" | "external_account_id" | "access_token_ciphertext"
+      >;
+      social_oauth_pending: Table<SocialOauthPendingRow, "organization_id" | "user_id" | "provider" | "access_token_ciphertext">;
+      media_assets: Table<MediaAssetRow, "organization_id" | "storage_path" | "kind" | "mime_type" | "size_bytes">;
+      publish_jobs: Table<
+        PublishJobRow,
+        "organization_id" | "social_account_id" | "post_id" | "provider" | "publish_format" | "scheduled_at" | "next_attempt_at" | "content_snapshot"
+      >;
+      metric_snapshots: Table<MetricSnapshotRow, "organization_id" | "social_account_id" | "provider" | "scope" | "metrics">;
+      post_performance_reviews: Table<PostPerformanceReviewRow, "organization_id" | "post_id" | "summary" | "confidence">;
+      content_learnings: Table<ContentLearningRow, "organization_id" | "learning" | "confidence">;
+      social_event_logs: Table<SocialEventLogRow, "organization_id" | "event_type">;
     };
     Views: { [_ in never]: never };
     Functions: {

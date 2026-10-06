@@ -1,7 +1,11 @@
 import "server-only";
 import type { DataRepository } from "@/lib/data/repository";
 import type { Organization, SnsAccount } from "@/lib/domain/types";
+import { getSystemStore } from "@/lib/social/access";
+import type { SocialStore } from "@/lib/social/store";
+import { seedDemoSocial } from "@/lib/demo/social-seed";
 import {
+  buildDemoHistoryPosts,
   buildDemoHqCampaign,
   buildDemoPosts,
   DEMO_ACCOUNTS,
@@ -15,7 +19,7 @@ import {
  * Creates a fully populated demo organization for the current user.
  * The organization is flagged is_demo so it is never mixed with real data.
  */
-export async function createDemoOrganization(repo: DataRepository): Promise<Organization> {
+export async function createDemoOrganization(repo: DataRepository, options: { social?: SocialStore | null } = {}): Promise<Organization> {
   const organization = await repo.createOrganization(DEMO_ORGANIZATION_NAME, { isDemo: true });
   const brain = await repo.saveBrandBrain(organization.id, DEMO_BRAND_BRAIN, { onboardingStep: 6, completeOnboarding: true });
   const locationIds = brain.locations.map((l) => l.id ?? null);
@@ -45,10 +49,20 @@ export async function createDemoOrganization(repo: DataRepository): Promise<Orga
     }),
   );
 
-  // Demo planner posts across stores and HQ accounts (acquisition + recruitment).
-  for (const { accountHandle, ...post } of buildDemoPosts()) {
+  // Demo planner posts across stores and HQ accounts (acquisition + recruitment),
+  // plus ~6 weeks of published history for the Measure → Learn loop.
+  for (const { accountHandle, ...post } of [...buildDemoHistoryPosts(), ...buildDemoPosts()]) {
     const account = accounts.find((a) => a.handle === accountHandle);
     await repo.createPost(organization.id, { ...post, accountId: account?.id ?? null, locationId: account?.locationId ?? null });
+  }
+  // Mock connections, publish jobs, insights, reviews, Marketing Memory.
+  const social = options.social === undefined ? getSystemStore() : options.social;
+  if (social) {
+    try {
+      await seedDemoSocial(social, repo, organization.id);
+    } catch (error) {
+      console.error("[demo] social seed failed", error instanceof Error ? error.message : error);
+    }
   }
   return organization;
 }

@@ -44,6 +44,8 @@ export interface PostPatch {
   hashtags?: string[];
   status?: PostStatus;
   scheduledAt?: string | null;
+  /** target social account (location follows the account) */
+  accountId?: ID | null;
 }
 
 export interface PlanItemPatch extends Partial<PlanItemInput> {

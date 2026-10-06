@@ -90,7 +90,7 @@ test("monthly plan: AI proposal → edit / regenerate / reject / approve → pla
 test("dashboard: HQ overview with store / account scope and AI recommendations", async ({ page }) => {
   await loginDemo(page);
   await expect(page.getByLabel("本部運用サマリー")).toContainText("採用アカウント");
-  await expect(page.getByRole("cell", { name: "NAORU整体 池袋院" })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "NAORU整体 池袋院" }).first()).toBeVisible();
   await page.getByLabel("表示範囲").selectOption({ label: "NAORU整体 池袋院（店舗全体）" });
   await expect(page).toHaveURL(/scope=loc%3A|scope=loc:/);
   await expect(page.getByRole("cell", { name: "NAORU整体 渋谷院" })).toHaveCount(0);

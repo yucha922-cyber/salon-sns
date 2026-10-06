@@ -6,6 +6,7 @@ import { getDataMode, getSiteUrl } from "@/lib/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { deterministicIds, getDemoStore, newId, persistDemoStore } from "@/lib/data/demo-store";
 import { DemoRepository } from "@/lib/data/demo-repository";
+import { DemoSocialStore } from "@/lib/social/demo-store";
 import { SupabaseRepository } from "@/lib/data/supabase-repository";
 import type { DataRepository } from "@/lib/data/repository";
 import { createDemoOrganization } from "@/lib/services/organizations";
@@ -49,7 +50,9 @@ function ensureDemoAccount(): Promise<void> {
       passwordHash: hashPassword(DEMO_ACCOUNT.password),
     });
     persistDemoStore();
-    await createDemoOrganization(new DemoRepository(id, deterministicIds("naoru-demo-hq")));
+    await createDemoOrganization(new DemoRepository(id, deterministicIds("naoru-demo-hq")), {
+      social: new DemoSocialStore(deterministicIds("naoru-demo-social")),
+    });
   })();
   return demoSeedPromise;
 }

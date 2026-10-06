@@ -91,7 +91,7 @@ test("sign up → onboarding → Brand Brain → chat → post → planner", asy
 
   // Posts list shows it as scheduled
   await page.getByRole("link", { name: "▤ 投稿一覧", exact: true }).click();
-  await expect(page.getByRole("row").filter({ hasText: "デスクでできる腰痛ケア3選" })).toContainText("予約済み");
+  await expect(page.getByRole("row").filter({ hasText: "デスクでできる腰痛ケア3選" })).toContainText("予定");
 
   // Logout → login again
   await page.getByRole("button", { name: "アカウントメニュー" }).click();

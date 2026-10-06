@@ -13,6 +13,10 @@ import { ScopeSelect } from "@/components/planning/scope-select";
 import { RecommendationList } from "@/components/recommendations/recommendation-list";
 import { computeOperationsOverview, parseScope } from "@/lib/services/operations";
 import { goalLabel, PLATFORM_LABELS } from "@/lib/domain/labels";
+import { filterByLocation, getSocialContext } from "@/lib/social/access";
+import { computeAttention, computeCrossLocation, computePerformanceOverview } from "@/lib/social/analytics";
+import { runDemoTickIfDue } from "@/lib/social/demo-tick";
+import { formatNumber, formatPercent } from "@/lib/social/metrics";
 
 function greeting(hour: number) {
   if (hour < 11) return "おはようございます";
@@ -21,17 +25,27 @@ function greeting(hour: number) {
 }
 
 export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ scope?: string }> }) {
-  const { user, repo, current, brain } = await requireAppContext();
+  const app = await requireAppContext();
+  const { user, repo, current, brain } = app;
   const org = current.organization;
+  const social = await getSocialContext(app);
+  await runDemoTickIfDue(org.id, repo);
   const scopeParam = (await searchParams).scope ?? "all";
   const scope = parseScope(scopeParam);
-  const [allPosts, accounts, locationProfiles, hqCampaigns, recommendations] = await Promise.all([
+  const [allPosts, allAccounts, locationProfiles, hqCampaigns, recommendations, snapshots, jobs] = await Promise.all([
     repo.listPosts(org.id),
     repo.listAccounts(org.id),
     repo.listLocationProfiles(org.id),
     repo.listHqCampaigns(org.id),
     repo.listRecommendations(org.id),
+    social.reader.listSnapshots(org.id, { since: new Date(Date.now() - 62 * 86_400_000).toISOString() }).catch(() => []),
+    social.reader.listJobs(org.id, { statuses: ["failed"], limit: 50 }).catch(() => []),
   ]);
+  const topLearning = (await social.reader.listLearnings(org.id, { status: "active" }).catch(() => []))
+    .filter((l) => social.locationIds === null || l.locationId === null || social.locationIds.includes(l.locationId))
+    .sort((a, b) => b.confidence - a.confidence)[0];
+  // Location managers only see their own locations.
+  const accounts = filterByLocation(social, allAccounts);
   const ops = computeOperationsOverview({ accounts, locations: locationProfiles, posts: allPosts, campaigns: hqCampaigns }, scope);
   const posts = allPosts.filter(
     (p) => scope.kind === "all" || (scope.kind === "location" ? p.locationId === scope.id : p.accountId === scope.id),
@@ -41,7 +55,12 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   );
   const accountLabels = Object.fromEntries(accounts.map((a) => [a.id, a.handle]));
   const locations = locationProfiles.map((l) => ({ id: l.locationId, name: l.locationName }));
-  const metrics = getDashboardMetrics(org, posts);
+  const scopedAccounts = accounts.filter((a) => scope.kind === "all" || (scope.kind === "location" ? a.locationId === scope.id : a.id === scope.id));
+  const analyticsInput = { posts, accounts: scopedAccounts, locations: locationProfiles, snapshots, jobs: filterByLocation(social, jobs), recommendations: scopedRecommendations };
+  const performance = computePerformanceOverview(analyticsInput);
+  const attention = computeAttention(analyticsInput).filter((i) => i.kind !== "info" || i.href !== "/analysis");
+  const crossLocation = computeCrossLocation(analyticsInput);
+  const metrics = getDashboardMetrics(org, posts, performance);
   const campaigns = getCampaigns(org).slice(0, 3);
   const upcoming = upcomingPosts(posts);
   const completeness = brandBrainCompleteness(brain);
@@ -67,7 +86,36 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         }
       />
 
-      <ScopeSelect value={scopeParam} locations={locations} accounts={accounts} />
+      <ScopeSelect value={scopeParam} locations={locations.filter((l) => social.locationIds === null || social.locationIds.includes(l.id))} accounts={accounts} />
+      <section className="content-grid" style={{ marginTop: 0, marginBottom: 16 }}>
+        <div className="panel">
+          <div className="panel-heading">
+            <div><div className="panel-title">要対応（問題・チャンス）</div><div className="panel-subtitle">全店舗を毎日見なくても、確認が必要なものだけを上位に表示します</div></div>
+            <Link className="button small" href="/publishing">Publish Queue →</Link>
+          </div>
+          {attention.length ? (
+            <div className="attention-list">
+              {attention.slice(0, 6).map((item, i) => (
+                <Link key={`${item.title}-${i}`} href={item.href} className={`attention-item ${item.kind}`}>
+                  <span className="dot">{item.kind === "problem" ? "!" : item.kind === "opportunity" ? "↑" : "i"}</span>
+                  <span><b>{item.title}</b><small>{item.detail}</small></span>
+                  <span className="activity-note">→</span>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <p className="activity-note">いま対応が必要な問題はありません。</p>
+          )}
+        </div>
+        <div className="panel">
+          <div className="panel-heading"><div><div className="panel-title">運用ループ</div><div className="panel-subtitle">Plan → Create → Approve → Publish → Measure → Analyze → Learn</div></div></div>
+          <div className="metric-row">
+            <div className="metric-mini"><span>予約・処理中</span><b>{allPosts.filter((p) => p.status === "queued" || p.status === "publishing").length}本</b><small><Link className="link-button" href="/publishing">Publish Queue</Link></small></div>
+            <div className="metric-mini"><span>承認待ち（予定）</span><b>{allPosts.filter((p) => p.status === "scheduled" || p.status === "approved").length}本</b><small><Link className="link-button" href="/planner">カレンダー</Link></small></div>
+            <div className="metric-mini"><span>計測済み投稿（30日）</span><b>{performance.measuredCount}本</b><small><Link className="link-button" href="/performance">成果分析</Link></small></div>
+          </div>
+        </div>
+      </section>
       <section className="ops-grid" aria-label="本部運用サマリー">
         {[
           ["運用店舗", `${ops.activeLocations}`],
@@ -133,9 +181,38 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         </div>
       </section>
 
+      <section className="panel" style={{ marginBottom: 16 }} aria-label="店舗横断パフォーマンス">
+        <div className="panel-heading">
+          <div><div className="panel-title">店舗横断パフォーマンス（直近30日）</div><div className="panel-subtitle">どの店舗・アカウントを見るべきかを一覧で確認できます</div></div>
+          <Link className="button small" href="/performance">成果分析 →</Link>
+        </div>
+        <div className="table-wrap">
+          <table className="data-table">
+            <thead><tr><th>店舗</th><th>Platform</th><th>目的</th><th>投稿</th><th>Reach/閲覧</th><th>ER</th><th>Growth</th><th>Top Content</th><th>Warnings</th><th>AI提案</th></tr></thead>
+            <tbody>
+              {crossLocation.map((r) => (
+                <tr key={r.account.id}>
+                  <td><b>{r.locationName}</b></td>
+                  <td>{PLATFORM_LABELS[r.account.platform]} <span className="table-muted">{r.account.handle}</span></td>
+                  <td><span className={`goal-pill ${r.account.goal}`}>{r.goalLabel}</span></td>
+                  <td>{r.posts}</td>
+                  <td>{formatNumber(r.reach)}</td>
+                  <td>{formatPercent(r.engagementRate)}</td>
+                  <td className={(r.growth ?? 0) >= 0 ? "table-strong" : ""}>{r.growth === undefined ? "—" : `${r.growth >= 0 ? "+" : ""}${formatNumber(r.growth)}`}</td>
+                  <td className="table-muted" style={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis" }}>{r.topContent ?? "—"}</td>
+                  <td>{r.warnings ? <span className="status-pill failed">{r.warnings}</span> : <span className="table-muted">0</span>}</td>
+                  <td>{r.recommendations || <span className="table-muted">0</span>}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {performance.insufficient && <p className="activity-note" style={{ marginTop: 8 }}>insufficient data：計測済みの投稿が少ないため、平均との比較は参考値です。</p>}
+      </section>
+
       <section className={`metric-grid ${metrics.ads ? "five" : ""}`}>
         {metrics.sns.map((m) => (
-          <MetricCard key={m.label} metric={m} note={m.value === "—" ? "SNS連携後に表示されます" : "Brand Brainの投稿データ"} />
+          <MetricCard key={m.label} metric={m} note={m.value === "—" ? "SNS連携・計測後に表示されます" : performance.measuredCount ? "Instagram / Threads Insights（直近30日）" : "Brand Brainの投稿データ"} />
         ))}
         {metrics.ads?.map((m) => <MetricCard key={m.label} metric={m} />)}
       </section>
@@ -168,7 +245,14 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         </div>
         <article className="insight-card">
           <div className="insight-label"><span className="spark">✳</span> AIからの今日の提案</div>
-          {org.isDemo ? (
+          {topLearning ? (
+            <>
+              <h3>{topLearning.learning}</h3>
+              <p>
+                {topLearning.hypothesis ? `仮説：${topLearning.hypothesis}。` : ""}この学びはMarketing Memoryに保存され、次の月間計画・投稿作成に反映されます。
+              </p>
+            </>
+          ) : org.isDemo ? (
             <>
               <h3>「姿勢リセット」投稿の保存率が高まっています</h3>
               <p>
@@ -185,11 +269,12 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             </>
           )}
           <div className="insight-footer">
-            <span className="confidence">Brand Brain 完成度 {completeness.score}%</span>
+            <span className="confidence">{topLearning ? `Marketing Memory · 確度 ${Math.round(topLearning.confidence * 100)}%` : `Brand Brain 完成度 ${completeness.score}%`}</span>
             <span className="priority-tag">今週のおすすめ</span>
           </div>
           <div style={{ marginTop: 14, display: "flex", gap: 8, flexWrap: "wrap" }}>
             <Link className="button small soft" href="/chat">AIマーケターに相談 →</Link>
+            {topLearning && <Link className="button small" href="/memory">Marketing Memory</Link>}
             {completeness.missing.length > 0 && (
               <Link className="button small" href="/brand">Brand Brainを充実させる</Link>
             )}
