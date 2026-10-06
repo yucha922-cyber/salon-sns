@@ -3,7 +3,7 @@
  * (form submissions, server actions). Never trust client input.
  */
 import { z } from "zod";
-import { CONTENT_TYPES, POST_STATUSES, SOCIAL_PLATFORMS } from "./types";
+import { ACCOUNT_GOALS, CONTENT_TYPES, HQ_CAMPAIGN_STATUSES, POST_STATUSES, SOCIAL_PLATFORMS } from "./types";
 
 const text = (max: number) => z.string().trim().max(max, `${max}文字以内で入力してください`);
 const list = (maxItems: number, maxLen = 120) =>
@@ -106,6 +106,9 @@ export const savePostSchema = z.object({
   status: z.enum(POST_STATUSES),
   scheduledAt: z.string().datetime({ offset: true }).nullable(),
   generationInput: z.record(z.string(), z.string().max(500)).optional(),
+  accountId: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/).nullable().optional(),
+  locationId: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/).nullable().optional(),
+  hqCampaignId: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/).nullable().optional(),
 });
 export type SavePostRequest = z.infer<typeof savePostSchema>;
 
@@ -130,3 +133,54 @@ export const authCredentialsSchema = z.object({
 export const signUpSchema = authCredentialsSchema.extend({
   displayName: text(60).min(1, "お名前を入力してください"),
 });
+
+// ---------------------------------------------------------------------------
+// Account strategy / location customization / HQ templates
+// ---------------------------------------------------------------------------
+const idSchema = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/, "IDが不正です");
+
+export const accountStrategySchema = z.object({
+  persona: text(500),
+  kpis: list(10, 80),
+  contentPillars: list(10, 60),
+  postsPerWeek: z.number().int().min(0).max(50),
+  postingFrequencyNote: text(200),
+  cta: text(200),
+  tone: text(300),
+});
+
+export const snsAccountInputSchema = z.object({
+  platform: z.enum(SOCIAL_PLATFORMS),
+  handle: text(80).min(1, "アカウントIDを入力してください"),
+  displayName: text(80),
+  locationId: idSchema.nullable(),
+  goal: z.enum(ACCOUNT_GOALS),
+  strategy: accountStrategySchema,
+});
+
+export const locationProfileInputSchema = z.object({
+  area: text(120),
+  demographics: text(500),
+  featuredServices: list(20),
+  staff: z.array(z.object({ name: text(60).min(1, "スタッフ名を入力してください"), role: text(60), specialty: text(200) })).max(30),
+  offers: list(10, 200),
+  localKeywords: list(20, 60),
+});
+
+const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "日付の形式が正しくありません").nullable();
+
+export const hqCampaignInputSchema = z
+  .object({
+    name: text(120).min(1, "キャンペーン名を入力してください"),
+    status: z.enum(HQ_CAMPAIGN_STATUSES),
+    startsOn: dateSchema,
+    endsOn: dateSchema,
+    sharedTheme: text(500).min(1, "共通テーマを入力してください"),
+    creative: z.object({ headline: text(120), body: text(1000), visual: text(300) }),
+    localizationRules: list(15, 200),
+    targetLocationIds: z.array(idSchema).max(200),
+  })
+  .refine((v) => !v.startsOn || !v.endsOn || v.endsOn >= v.startsOn, {
+    message: "終了日は開始日以降にしてください",
+    path: ["endsOn"],
+  });

@@ -10,6 +10,8 @@ Sign up / Login → Organization作成 → Business Profile入力（6ステッ�
 → Dashboard → AI Marketing Chat → AI Post Creator → SNS Plannerへ保存
 ```
 
+複数店舗を持つ事業者向けに、**アカウント戦略**（集客・採用・ブランディング）、**本部テンプレート**（本部キャンペーンを各店舗向けにローカライズ）、**店舗カスタマイズ**（エリア・客層・スタッフ・オファー・ローカルキーワード）も備えています。
+
 外部SNS API（Instagram / Meta広告など）への接続と、広告の自動変更は **まだ行いません**。
 
 ## Tech stack
@@ -54,7 +56,8 @@ app/
   onboarding/                   6ステップのオンボーディング（/complete で完成画面）
   (app)/                        ログイン必須の製品画面（共通シェル）
     dashboard planner creator posts ads analysis studio chat brand settings
-  actions/                      Server Actions（auth, organization, brand, ai, posts）
+    accounts hq locations       アカウント戦略 / 本部テンプレート / 店舗カスタマイズ
+  actions/                      Server Actions（auth, organization, brand, ai, posts, strategy）
 components/
   shell/ ui/ auth/ onboarding/ brand/ chat/ creator/ posts/ ads/ studio/ settings/
 lib/
@@ -64,7 +67,7 @@ lib/
   data/          Repository interface と Supabase / Demo 実装
   auth/          認証ファサード、組織コンテキスト、Demoセッション
   supabase/      server/middleware クライアント、Database型
-  services/      組織（デモ組織作成）、分析リードモデル、エラー変換
+  services/      組織（デモ組織作成）、本部→店舗ローカライズ、分析リードモデル、エラー変換
   demo/seed.ts   デモ組織「NAORU整体 渋谷院」データ
 supabase/
   migrations/    スキーマ＋RLS＋RPC
@@ -76,19 +79,22 @@ middleware.ts    ルート保護
 
 ## Database schema
 
-`supabase/migrations/20261006000000_init.sql`。全テーブル UUID 主キー・`created_at`/`updated_at`（トリガーで自動更新）。
+`supabase/migrations/20261006000000_init.sql` と `20261007000000_accounts_hq_locations.sql`。全テーブル UUID 主キー・`created_at`/`updated_at`（トリガーで自動更新）。
 
 | 区分 | テーブル |
 |---|---|
 | ユーザー・組織 | `profiles`, `organizations`(`is_demo`), `organization_members`(role: owner/admin/editor/viewer) |
 | Brand Brain | `brands`, `business_profiles`, `locations`, `target_audiences`, `personas`, `services`, `competitors`, `brand_assets`, `social_accounts` |
-| SNS | `posts`(status: draft/scheduled/published/failed), `post_schedules` |
+| SNS | `posts`(status: draft/scheduled/published/failed, `social_account_id`, `hq_campaign_id`), `post_schedules` |
+| アカウント戦略 | `social_accounts`(goal: acquisition/recruitment/branding, 店舗紐付け, 同一SNSに複数可), `account_strategies`(persona, kpis, content_pillars, posts_per_week, cta, tone) |
+| 本部・店舗 | `hq_campaigns`(共通テーマ・共通クリエイティブ・localization_rules・対象店舗), `location_profiles`(area, demographics, featured_services, offers, local_keywords), `location_staff` |
 | 広告 | `campaigns`, `ad_sets`, `ads`, `creatives`, `metrics` |
 | AI | `ai_recommendations`(承認ステータス), `ai_conversations`, `ai_messages` |
 
 RPC:
 - `create_organization(name, is_demo)` — 組織・owner権限・空のBrand Brainを原子的に作成
 - `save_brand_brain(brand_id, payload)` — Brand Brain全体を1トランザクションで保存（SECURITY INVOKER = RLS適用）
+- `sync_brand_default_accounts(brand_id, social)` — Brand BrainのSNS欄を「ブランド標準アカウント」と同期（店舗・採用アカウントや戦略は保持）
 
 今回アプリが読み書きしているのは ユーザー・組織・Brand Brain・SNS・AI会話 のテーブルです。広告系テーブルは将来の同期先として定義のみ。
 
@@ -106,9 +112,24 @@ RPC:
 
 - 1ユーザーは `organization_members` を通じて複数組織に所属できます（サイドバーの組織切替）。
 - テナントデータはすべて `organization_id` を持ち、RLS ポリシー `is_org_member()` / `can_edit_org()` で分離。
-- 子テーブルが別組織の親（brand / post / conversation）を参照できないよう、トリガーで同一組織を強制。
+- 子テーブルが別組織の親（brand / location / account / campaign / post / conversation）を参照できないよう、トリガーで同一組織を強制（本部キャンペーンの対象店舗も同様）。
 - 「現在の組織」Cookieは、ユーザーの所属組織の中から選ぶためだけに使い、権限の根拠にはしません。
-- `supabase/tests/rls_test.sql` で「他組織の閲覧・更新・挿入・Brand Brain保存・異組織への紐付け」がすべて拒否されることを検証済み。
+- `supabase/tests/rls_test.sql` / `rls_accounts_test.sql` で「他組織の閲覧・更新・挿入・Brand Brain保存・異組織への紐付け（店舗・アカウント・キャンペーン）」がすべて拒否されることを検証済み。
+
+## Account strategy / HQ template / Location customization
+
+```
+Brand Brain（ブランド共通の事実）
+  ├─ Account Strategy  … アカウントごとの目的（集客/採用/ブランディング）・ペルソナ・KPI・柱・頻度・CTA・トーン
+  ├─ Location Customization … 店舗ごとのエリア・客層・注力サービス・スタッフ・オファー・ローカルキーワード
+  └─ HQ Template … 本部キャンペーン・共通テーマ・共通クリエイティブ・ローカライズのルール
+```
+
+- **アカウント戦略**（`/accounts`）: 目的別にアカウントを管理。目的ごとのテンプレート適用、または「AIで提案」でBrand Brainと店舗情報から戦略を生成。
+- **店舗カスタマイズ**（`/locations`）: Brand Brainの各店舗に追加情報を設定。
+- **本部テンプレート**（`/hq`）: 共通テーマ・クリエイティブ・ルールを決め、「全店舗の下書きを生成」で対象店舗ごとにAIがローカライズした下書きを作成（各店舗の集客アカウントを自動選択、キャンペーン開始日20時に仮置き、人の確認後に予約）。
+- **AI投稿作成**: アカウント・本部キャンペーンを選ぶと、その戦略・店舗情報・ローカライズルールが自動で反映。
+- AIへの優先順位: Brand Brain（事実・表現ルール）＜ アカウント戦略 ＜ 店舗情報。ローカライズのルールは必ず守る制約として渡します。
 
 ## Brand Brain architecture
 
@@ -127,7 +148,8 @@ lib/ai/
   mock.ts            APIキーなしで動くMock（各機能のBrand Brain連動モック）
   schemas.ts         AI出力のzodスキーマ（投稿・広告コンセプト・広告分析）
   prompts/
-    marketing-chat.ts  post-creator.ts  creative-studio.ts  ad-analysis.ts
+    marketing-chat.ts  post-creator.ts（本部ローカライズにも使用）  account-strategy.ts
+    creative-studio.ts  ad-analysis.ts
 ```
 
 - Provider選択：`AI_PROVIDER`（`anthropic` / `openai` / `mock`）。未指定ならキーがあるものを自動選択、なければ Mock。Anthropic のデフォルトモデルは `claude-opus-5-5`（`ANTHROPIC_MODEL` で変更可）。
@@ -174,6 +196,7 @@ cat supabase/tests/auth_stub.sql supabase/migrations/*.sql supabase/tests/rls_te
 ## Demo mode
 
 - Supabase未設定時は **Demoモード**：サーバー内メモリ（開発時は `.demo-data/store.json` に保存）＋署名付きCookie認証。全フローが動作します。
+- デモ組織には渋谷院・新宿院の2店舗、4つのアカウント（本部ブランディング・渋谷集客・新宿集客・採用）、店舗カスタマイズ、本部キャンペーン「秋の姿勢改善キャンペーン」が入っています。
 - ログイン画面の「デモアカウントで試す」で、デモ組織 **NAORU整体 渋谷院**（整体 / Healthcare / Wellness、30代女性・渋谷勤務のデスクワーカー、肩こり・首こり・姿勢・仕事終わりの疲れ、清潔感・専門性・都会的・親しみやすい）にすぐ入れます。
 - 新規ユーザーもオンボーディングやサイドバーから「デモ組織」を追加できます（Supabaseモードでも可）。
 - デモ組織は `organizations.is_demo = true`。SNSリーチや広告成果などのモック数値は **デモ組織にだけ** 表示し、本番組織には未連携の空状態を表示します。
@@ -189,6 +212,9 @@ cat supabase/tests/auth_stub.sql supabase/migrations/*.sql supabase/tests/rls_te
 - AI投稿作成（platform / 形式 / テーマ / ターゲット / 目的 / トーン → タイトル・キャプション・CTA・ハッシュタグ生成 → 編集 → 予約/下書きで SNS Planner に保存）
 - 投稿カレンダー（月移動・SNS絞り込み・日付から作成・投稿編集）、投稿一覧（ステータス別）
 - Creative Studio（Brand Brainから4つの広告コンセプトを生成）
+- アカウント戦略（集客・採用・ブランディング別、ペルソナ・KPI・柱・頻度・CTA・トーン、テンプレート適用・AI提案）
+- 本部テンプレート（本部キャンペーン・共通テーマ・共通クリエイティブ・ローカライズルール・対象店舗、全店舗分の下書きを一括生成）
+- 店舗カスタマイズ（エリア・客層・注力サービス・スタッフ・オファー・ローカルキーワード）
 - 広告ダッシュボード / AI分析（デモ組織のみデータ表示、AI再分析、承認UIは記録のみで広告は変更しない）
 - Loading（Skeleton）/ Empty / Error state、Toast、フォームバリデーション、Disabled state
 
@@ -196,7 +222,8 @@ cat supabase/tests/auth_stub.sql supabase/migrations/*.sql supabase/tests/rls_te
 
 - SNS・広告アカウントのOAuth連携、投稿の自動公開、インサイト・広告実績の同期
 - 参考素材アップロード（Supabase Storage）、画像・動画生成
-- メンバー招待・権限管理UI、通知、プラン・請求
+- メンバー招待・権限管理UI（店舗スタッフに担当店舗だけを編集させる店舗単位の権限）、通知、プラン・請求
+- 本部キャンペーンの承認フロー（店舗の下書き → 本部承認 → 予約）、KPIの実績計測（SNS連携後）
 - AI応答のストリーミング、AI利用量の上限・レート制限
 - パスワードリセット、ソーシャルログイン
 

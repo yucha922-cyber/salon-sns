@@ -8,16 +8,25 @@ import type {
   ContentType,
   ID,
   NewPostInput,
+  HqCampaign,
+  HqCampaignInput,
+  LocationProfile,
+  LocationProfileInput,
   Organization,
   OrganizationMembership,
   Post,
+  SnsAccount,
+  SnsAccountInput,
 } from "@/lib/domain/types";
 import { CONTENT_TYPES } from "@/lib/domain/types";
 import { sortPosts } from "@/lib/domain/posts";
 import type { ServerSupabaseClient } from "@/lib/supabase/server";
 import type {
+  AccountStrategyRow,
+  HqCampaignRow,
   Json,
   OrganizationRow,
+  SocialAccountRow,
   PostRow,
   PostScheduleRow,
   SocialPlatformEnum,
@@ -60,6 +69,50 @@ function toPost(row: PostRow, schedule: Pick<PostScheduleRow, "scheduled_at"> | 
     status: row.status,
     source: row.source,
     scheduledAt: schedule?.scheduled_at ?? null,
+    createdAt: row.created_at,
+    accountId: row.social_account_id,
+    locationId: row.location_id,
+    hqCampaignId: row.hq_campaign_id,
+  };
+}
+
+const APP_PLATFORMS = ["instagram", "threads", "tiktok", "facebook"] as const;
+
+function toAccount(row: SocialAccountRow, strategy: AccountStrategyRow | undefined): SnsAccount | null {
+  const platform = APP_PLATFORMS.find((p) => p === row.platform);
+  if (!platform) return null;
+  return {
+    id: row.id,
+    platform,
+    handle: row.handle,
+    displayName: row.display_name,
+    locationId: row.location_id,
+    goal: row.goal,
+    isBrandDefault: row.is_brand_default,
+    connectionStatus: row.connection_status,
+    strategy: {
+      persona: strategy?.persona ?? "",
+      kpis: strategy?.kpis ?? [],
+      contentPillars: strategy?.content_pillars ?? [],
+      postsPerWeek: strategy?.posts_per_week ?? 3,
+      postingFrequencyNote: strategy?.posting_frequency_note ?? "",
+      cta: strategy?.cta ?? "",
+      tone: strategy?.tone ?? "",
+    },
+  };
+}
+
+function toHqCampaign(row: HqCampaignRow): HqCampaign {
+  return {
+    id: row.id,
+    name: row.name,
+    status: row.status,
+    startsOn: row.starts_on,
+    endsOn: row.ends_on,
+    sharedTheme: row.shared_theme,
+    creative: { headline: row.creative_headline, body: row.creative_body, visual: row.creative_visual },
+    localizationRules: row.localization_rules,
+    targetLocationIds: row.target_location_ids,
     createdAt: row.created_at,
   };
 }
@@ -139,7 +192,7 @@ export class SupabaseRepository implements DataRepository {
       this.db.from("services").select("*").match(byBrand).order("sort_order"),
       this.db.from("competitors").select("*").match(byBrand).order("sort_order"),
       this.db.from("locations").select("*").match(byBrand).order("sort_order"),
-      this.db.from("social_accounts").select("*").match(byBrand),
+      this.db.from("social_accounts").select("*").match(byBrand).eq("is_brand_default", true),
     ]);
     [profile, audience, personas, services, competitors, locations, socials].forEach((r) =>
       fail(r.error, "getBrandBrain"),
@@ -251,6 +304,9 @@ export class SupabaseRepository implements DataRepository {
         generation_input: input.generationInput ?? null,
         ai_provider: input.aiProvider ?? null,
         created_by: this.userId,
+        social_account_id: input.accountId ?? null,
+        location_id: input.locationId ?? null,
+        hq_campaign_id: input.hqCampaignId ?? null,
       })
       .select("*")
       .single();
@@ -375,5 +431,184 @@ export class SupabaseRepository implements DataRepository {
       .update({ updated_at: new Date().toISOString() })
       .eq("id", conversationId);
     return { id: data.id, role: data.role, content: data.content, createdAt: data.created_at };
+  }
+
+  // -------------------------------------------------------------------------
+  // Accounts
+  // -------------------------------------------------------------------------
+
+  async listAccounts(organizationId: ID): Promise<SnsAccount[]> {
+    const [accounts, strategies] = await Promise.all([
+      this.db.from("social_accounts").select("*").eq("organization_id", organizationId).order("created_at"),
+      this.db.from("account_strategies").select("*").eq("organization_id", organizationId),
+    ]);
+    fail(accounts.error, "listAccounts");
+    fail(strategies.error, "listAccounts.strategies");
+    return (accounts.data ?? []).flatMap((row) => {
+      const account = toAccount(row, strategies.data?.find((s) => s.social_account_id === row.id));
+      return account ? [account] : [];
+    });
+  }
+
+  async saveAccount(organizationId: ID, accountId: ID | null, input: SnsAccountInput): Promise<SnsAccount> {
+    const brand = await this.getBrandRow(organizationId);
+    if (!brand) throw new RepositoryError("brand not found", "not_found");
+    const fields = {
+      handle: input.handle,
+      display_name: input.displayName,
+      location_id: input.locationId,
+      goal: input.goal,
+    };
+    let row: SocialAccountRow | null;
+    if (accountId) {
+      // Brand-default accounts keep their platform (it mirrors the Brand Brain field).
+      const { data: existing, error: readError } = await this.db
+        .from("social_accounts").select("is_brand_default").eq("id", accountId).eq("organization_id", organizationId).maybeSingle();
+      fail(readError, "saveAccount.read");
+      if (!existing) throw new RepositoryError("account not found", "not_found");
+      const { data, error } = await this.db
+        .from("social_accounts")
+        .update(existing.is_brand_default ? fields : { ...fields, platform: input.platform })
+        .eq("id", accountId)
+        .eq("organization_id", organizationId)
+        .select("*")
+        .single();
+      fail(error, "saveAccount.update");
+      row = data;
+    } else {
+      const { data, error } = await this.db
+        .from("social_accounts")
+        .insert({ ...fields, organization_id: organizationId, brand_id: brand.id, platform: input.platform, is_brand_default: false })
+        .select("*")
+        .single();
+      fail(error, "saveAccount.insert");
+      row = data;
+    }
+    if (!row) throw new RepositoryError("account not saved");
+    const { data: strategy, error: strategyError } = await this.db
+      .from("account_strategies")
+      .upsert(
+        {
+          organization_id: organizationId,
+          social_account_id: row.id,
+          persona: input.strategy.persona,
+          kpis: input.strategy.kpis,
+          content_pillars: input.strategy.contentPillars,
+          posts_per_week: input.strategy.postsPerWeek,
+          posting_frequency_note: input.strategy.postingFrequencyNote,
+          cta: input.strategy.cta,
+          tone: input.strategy.tone,
+        },
+        { onConflict: "social_account_id" },
+      )
+      .select("*")
+      .single();
+    fail(strategyError, "saveAccount.strategy");
+    const account = toAccount(row, strategy ?? undefined);
+    if (!account) throw new RepositoryError("unsupported platform", "invalid");
+    return account;
+  }
+
+  async deleteAccount(organizationId: ID, accountId: ID): Promise<void> {
+    const { error } = await this.db.from("social_accounts").delete().eq("id", accountId).eq("organization_id", organizationId);
+    fail(error, "deleteAccount");
+  }
+
+  // -------------------------------------------------------------------------
+  // Location customization
+  // -------------------------------------------------------------------------
+
+  async listLocationProfiles(organizationId: ID): Promise<LocationProfile[]> {
+    const brand = await this.getBrandRow(organizationId);
+    if (!brand) return [];
+    const [locations, profiles, staff] = await Promise.all([
+      this.db.from("locations").select("*").eq("brand_id", brand.id).order("sort_order"),
+      this.db.from("location_profiles").select("*").eq("organization_id", organizationId),
+      this.db.from("location_staff").select("*").eq("organization_id", organizationId).order("sort_order"),
+    ]);
+    [locations, profiles, staff].forEach((r) => fail(r.error, "listLocationProfiles"));
+    return (locations.data ?? []).map((l) => {
+      const p = profiles.data?.find((x) => x.location_id === l.id);
+      return {
+        locationId: l.id,
+        locationName: l.name,
+        address: l.address,
+        area: p?.area ?? "",
+        demographics: p?.demographics ?? "",
+        featuredServices: p?.featured_services ?? [],
+        offers: p?.offers ?? [],
+        localKeywords: p?.local_keywords ?? [],
+        staff: (staff.data ?? [])
+          .filter((s) => s.location_id === l.id)
+          .map((s) => ({ name: s.name, role: s.role, specialty: s.specialty })),
+      };
+    });
+  }
+
+  async saveLocationProfile(organizationId: ID, locationId: ID, input: LocationProfileInput): Promise<LocationProfile> {
+    const { error } = await this.db.from("location_profiles").upsert(
+      {
+        organization_id: organizationId,
+        location_id: locationId,
+        area: input.area,
+        demographics: input.demographics,
+        featured_services: input.featuredServices,
+        offers: input.offers,
+        local_keywords: input.localKeywords,
+      },
+      { onConflict: "location_id" },
+    );
+    fail(error, "saveLocationProfile");
+    const { error: deleteError } = await this.db
+      .from("location_staff").delete().eq("location_id", locationId).eq("organization_id", organizationId);
+    fail(deleteError, "saveLocationProfile.staff.delete");
+    if (input.staff.length) {
+      const { error: staffError } = await this.db.from("location_staff").insert(
+        input.staff.map((s, i) => ({ organization_id: organizationId, location_id: locationId, ...s, sort_order: i })),
+      );
+      fail(staffError, "saveLocationProfile.staff");
+    }
+    const saved = (await this.listLocationProfiles(organizationId)).find((p) => p.locationId === locationId);
+    if (!saved) throw new RepositoryError("location not found", "not_found");
+    return saved;
+  }
+
+  // -------------------------------------------------------------------------
+  // HQ templates
+  // -------------------------------------------------------------------------
+
+  async listHqCampaigns(organizationId: ID): Promise<HqCampaign[]> {
+    const { data, error } = await this.db
+      .from("hq_campaigns").select("*").eq("organization_id", organizationId).order("created_at", { ascending: false });
+    fail(error, "listHqCampaigns");
+    return (data ?? []).map(toHqCampaign);
+  }
+
+  async saveHqCampaign(organizationId: ID, campaignId: ID | null, input: HqCampaignInput): Promise<HqCampaign> {
+    const brand = await this.getBrandRow(organizationId);
+    const fields = {
+      name: input.name,
+      status: input.status,
+      starts_on: input.startsOn,
+      ends_on: input.endsOn,
+      shared_theme: input.sharedTheme,
+      creative_headline: input.creative.headline,
+      creative_body: input.creative.body,
+      creative_visual: input.creative.visual,
+      localization_rules: input.localizationRules,
+      target_location_ids: input.targetLocationIds.filter((id) => UUID_RE.test(id)),
+    };
+    const query = campaignId
+      ? this.db.from("hq_campaigns").update(fields).eq("id", campaignId).eq("organization_id", organizationId)
+      : this.db.from("hq_campaigns").insert({ ...fields, organization_id: organizationId, brand_id: brand?.id ?? null, created_by: this.userId });
+    const { data, error } = await query.select("*").single();
+    fail(error, "saveHqCampaign");
+    if (!data) throw new RepositoryError("campaign not saved");
+    return toHqCampaign(data);
+  }
+
+  async deleteHqCampaign(organizationId: ID, campaignId: ID): Promise<void> {
+    const { error } = await this.db.from("hq_campaigns").delete().eq("id", campaignId).eq("organization_id", organizationId);
+    fail(error, "deleteHqCampaign");
   }
 }

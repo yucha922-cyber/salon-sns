@@ -23,6 +23,9 @@ export async function savePostAction(input: unknown): Promise<ActionResult<Post>
       hashtags: data.hashtags.filter(Boolean).map((h) => (h.startsWith("#") ? h : `#${h}`)),
       source: data.generationInput ? "ai_post_creator" : "manual",
       aiProvider: data.generationInput ? getAIProvider().name : undefined,
+      accountId: data.accountId ?? null,
+      locationId: data.locationId ?? null,
+      hqCampaignId: data.hqCampaignId ?? null,
     });
     revalidatePath("/planner");
     revalidatePath("/posts");

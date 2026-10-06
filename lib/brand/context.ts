@@ -4,7 +4,8 @@
  * ad analysis). Features must not assemble brand info on their own, so the
  * AI always sees the same, complete, consistently ordered picture.
  */
-import type { BrandBrainInput } from "@/lib/domain/types";
+import type { BrandBrainInput, HqCampaign, LocationProfile, SnsAccount } from "@/lib/domain/types";
+import { ACCOUNT_GOAL_LABELS, PLATFORM_LABELS } from "@/lib/domain/labels";
 import { findIndustryPreset } from "./industries";
 
 export interface BrandContext {
@@ -160,4 +161,82 @@ export function brandBrainCompleteness(brain: BrandBrainInput): { score: number;
   ];
   const missing = checks.filter(([, ok]) => !ok).map(([label]) => label);
   return { score: Math.round(((checks.length - missing.length) / checks.length) * 100), missing };
+}
+
+// ---------------------------------------------------------------------------
+// Account / location / HQ layers on top of the Brand Brain
+// ---------------------------------------------------------------------------
+
+export interface MarketingScope {
+  account?: SnsAccount | null;
+  location?: LocationProfile | null;
+  campaign?: HqCampaign | null;
+}
+
+/**
+ * Extra context sections layered on the Brand Brain, in a fixed order:
+ * Account Strategy → Location Customization → HQ Campaign / Localization Rules.
+ * Precedence for the AI: brand rules < account strategy < location facts,
+ * while HQ "localization rules" are hard constraints.
+ */
+export function formatScopeContext(scope: MarketingScope): string {
+  const lines: string[] = [];
+  const { account, location, campaign } = scope;
+  if (account) {
+    const s = account.strategy;
+    lines.push(
+      "## Account Strategy",
+      `- アカウント: ${PLATFORM_LABELS[account.platform]} ${account.handle}${account.displayName ? `（${account.displayName}）` : ""}`,
+      `- 目的: ${ACCOUNT_GOAL_LABELS[account.goal]}`,
+      `- ペルソナ: ${s.persona || "Brand Brainのペルソナに従う"}`,
+      `- KPI: ${s.kpis.join("、") || "未設定"}`,
+      `- コンテンツの柱: ${s.contentPillars.join("、") || "未設定"}`,
+      `- 投稿頻度: 週${s.postsPerWeek}本${s.postingFrequencyNote ? `（${s.postingFrequencyNote}）` : ""}`,
+      `- CTA: ${s.cta || "未設定"}`,
+      `- トーン: ${s.tone || "Brand Brainのトーンに従う"}`,
+      "",
+    );
+  }
+  if (location) {
+    lines.push(
+      "## Location Customization",
+      `- 店舗: ${location.locationName}${location.address ? `（${location.address}）` : ""}`,
+      `- エリア: ${location.area || "未設定"}`,
+      `- 商圏・客層: ${location.demographics || "未設定"}`,
+      `- 店舗の注力サービス: ${location.featuredServices.join("、") || "Brand Brainのサービスに従う"}`,
+      `- スタッフ: ${location.staff.map((s) => [s.name, s.role, s.specialty].filter(Boolean).join(" / ")).join("、") || "未設定"}`,
+      `- 店舗独自のオファー: ${location.offers.join("、") || "なし"}`,
+      `- ローカルキーワード: ${location.localKeywords.join("、") || "未設定"}`,
+      "",
+    );
+  }
+  if (campaign) {
+    lines.push(
+      "## HQ Campaign（本部テンプレート）",
+      `- キャンペーン: ${campaign.name}${campaign.startsOn ? `（${campaign.startsOn}〜${campaign.endsOn ?? ""}）` : ""}`,
+      `- 共通テーマ: ${campaign.sharedTheme}`,
+      `- 共通クリエイティブ: 見出し「${campaign.creative.headline}」/ 本文「${campaign.creative.body}」/ ビジュアル「${campaign.creative.visual}」`,
+      "",
+      "## Localization Rules（必ず守る）",
+      ...(campaign.localizationRules.length ? campaign.localizationRules.map((r) => `- ${r}`) : ["- 本部の共通メッセージを保ちつつ、店舗情報で具体化する"]),
+      "",
+    );
+  }
+  return lines.join("\n").trim();
+}
+
+/** Short overview of all accounts and locations for the AI marketer chat. */
+export function formatPortfolioContext(accounts: SnsAccount[], locations: LocationProfile[]): string {
+  if (!accounts.length && !locations.length) return "";
+  const lines = ["## SNS Accounts & Locations"];
+  for (const a of accounts) {
+    const loc = locations.find((l) => l.locationId === a.locationId)?.locationName ?? "本部";
+    lines.push(
+      `- ${PLATFORM_LABELS[a.platform]} ${a.handle}（${loc} / 目的:${ACCOUNT_GOAL_LABELS[a.goal]} / 週${a.strategy.postsPerWeek}本 / KPI:${a.strategy.kpis.join("・") || "未設定"} / 柱:${a.strategy.contentPillars.join("・") || "未設定"}）`,
+    );
+  }
+  for (const l of locations) {
+    lines.push(`- 店舗 ${l.locationName}: エリア=${l.area || "未設定"} / キーワード=${l.localKeywords.join("・") || "未設定"} / オファー=${l.offers.join("・") || "なし"}`);
+  }
+  return lines.join("\n");
 }

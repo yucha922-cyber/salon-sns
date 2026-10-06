@@ -9,6 +9,9 @@
 import type {
   BrandBrainInput,
   Campaign,
+  HqCampaignInput,
+  LocationProfileInput,
+  SnsAccountInput,
   MetricSummary,
   NewPostInput,
   Recommendation,
@@ -31,12 +34,15 @@ export const DEMO_BRAND_BRAIN: BrandBrainInput = {
     "渋谷駅徒歩5分の完全個室の整体院。AI姿勢分析と国家資格保有者の施術で、デスクワークによる肩こり・首こり・姿勢の崩れを根本からケアします。",
   website: "naorusalon.jp/shibuya",
   social: {
-    instagram: "@naoru_shibuya",
-    threads: "@naoru_shibuya",
-    tiktok: "@naoru_shibuya",
+    instagram: "@naoru_official",
+    threads: "@naoru_official",
+    tiktok: "@naoru_official",
     facebook: "",
   },
-  locations: [{ name: "NAORU整体 渋谷院", address: "東京都渋谷区渋谷 2-14-13 岡崎ビル 5F" }],
+  locations: [
+    { name: "NAORU整体 渋谷院", address: "東京都渋谷区渋谷 2-14-13 岡崎ビル 5F" },
+    { name: "NAORU整体 新宿院", address: "東京都新宿区西新宿 1-5-2 3F" },
+  ],
   services: [
     { name: "全身整体コース", description: "60分。姿勢分析つきの全身調整。", price: 8800 },
     { name: "美容整体コース", description: "75分。骨格バランスとフェイスラインのケア。", price: 11000 },
@@ -210,3 +216,121 @@ export const DEMO_RECOMMENDATIONS: Recommendation[] = [
     tone: "positive",
   },
 ];
+
+// ---------------------------------------------------------------------------
+// Accounts / location customization / HQ template (indexes refer to
+// DEMO_BRAND_BRAIN.locations: 0 = 渋谷院, 1 = 新宿院, null = HQ)
+// ---------------------------------------------------------------------------
+
+export const DEMO_ACCOUNTS: (Omit<SnsAccountInput, "locationId"> & { locationIndex: number | null })[] = [
+  {
+    platform: "instagram",
+    handle: "@naoru_official",
+    displayName: "NAORU 本部",
+    locationIndex: null,
+    goal: "branding",
+    strategy: {
+      persona: "姿勢や体のケアに関心がある28〜42歳。整体院を比較検討していて、信頼できるブランドかを確かめたい。",
+      kpis: ["フォロワー数", "エンゲージメント率", "指名検索数"],
+      contentPillars: ["姿勢の専門コラム", "NAORUの想い", "店舗ネットワーク紹介", "季節キャンペーン"],
+      postsPerWeek: 3,
+      postingFrequencyNote: "世界観を揃えたフィード中心",
+      cta: "お近くの店舗はプロフィールから",
+      tone: "上品で信頼感のある専門家トーン",
+    },
+  },
+  {
+    platform: "instagram",
+    handle: "@naoru_shibuya",
+    displayName: "渋谷院",
+    locationIndex: 0,
+    goal: "acquisition",
+    strategy: {
+      persona: "渋谷勤務の30代女性デスクワーカー。夕方の肩こりがつらく、仕事帰りに通える整体を探している。",
+      kpis: ["プロフィール経由の予約数", "保存数", "プロフィールアクセス数"],
+      contentPillars: ["デスクでできるセルフケア", "AI姿勢分析の紹介", "スタッフ紹介", "渋谷院限定オファー"],
+      postsPerWeek: 4,
+      postingFrequencyNote: "Reel2本・フィード2本",
+      cta: "LINEで24時間予約受付中",
+      tone: "やさしく、話しかけるように",
+    },
+  },
+  {
+    platform: "instagram",
+    handle: "@naoru_shinjuku",
+    displayName: "新宿院",
+    locationIndex: 1,
+    goal: "acquisition",
+    strategy: {
+      persona: "西新宿のオフィスで働く30〜40代。腰痛と眼精疲労に悩み、昼休みや仕事帰りの短時間ケアを求めている。",
+      kpis: ["プロフィール経由の予約数", "保存数"],
+      contentPillars: ["腰痛・眼精疲労ケア", "昼休み30分コース", "スタッフ紹介"],
+      postsPerWeek: 3,
+      postingFrequencyNote: "Reel1本・フィード2本",
+      cta: "ご予約はプロフィールのリンクから",
+      tone: "テキパキと頼れるトーン",
+    },
+  },
+  {
+    platform: "instagram",
+    handle: "@naoru_recruit",
+    displayName: "NAORU 採用",
+    locationIndex: null,
+    goal: "recruitment",
+    strategy: {
+      persona: "技術を伸ばしたい20〜30代の柔道整復師・理学療法士。働きやすさと教育体制を重視している。",
+      kpis: ["応募数", "見学申込数"],
+      contentPillars: ["スタッフの1日", "教育・研修制度", "働く環境", "代表メッセージ"],
+      postsPerWeek: 2,
+      postingFrequencyNote: "Reel1本・フィード1本",
+      cta: "見学・カジュアル面談はDMから",
+      tone: "等身大で誠実に",
+    },
+  },
+];
+
+export const DEMO_LOCATION_PROFILES: LocationProfileInput[] = [
+  {
+    area: "渋谷・表参道",
+    demographics: "20代後半〜40代のオフィスワーカー。女性比率が高く、仕事帰り（18〜21時）の来店が多い。",
+    featuredServices: ["美容整体コース", "初回カウンセリング"],
+    staff: [
+      { name: "佐藤 結衣", role: "院長", specialty: "姿勢分析・美容整体" },
+      { name: "高橋 健", role: "施術スタッフ", specialty: "肩こり・首こり" },
+    ],
+    offers: ["平日19時以降のご予約で+10分延長"],
+    localKeywords: ["渋谷整体", "表参道整体", "渋谷肩こり"],
+  },
+  {
+    area: "西新宿",
+    demographics: "30〜40代の男女オフィスワーカー。昼休みと平日夜の短時間利用が中心。",
+    featuredServices: ["全身整体コース"],
+    staff: [{ name: "中村 大輔", role: "院長", specialty: "腰痛・骨盤調整" }],
+    offers: ["昼休み30分クイックコース ¥4,400"],
+    localKeywords: ["新宿整体", "西新宿腰痛"],
+  },
+];
+
+export function buildDemoHqCampaign(now: Date = new Date()): Omit<HqCampaignInput, "targetLocationIds"> {
+  const [y, m, d] = jstDateKey(now).split("-").map(Number) as [number, number, number];
+  const day = (offset: number) => new Date(Date.UTC(y, m - 1, d + offset)).toISOString().slice(0, 10);
+  return {
+    name: "秋の姿勢改善キャンペーン",
+    status: "active",
+    startsOn: day(3),
+    endsOn: day(33),
+    sharedTheme: "季節の変わり目の不調を、姿勢から整える。初回姿勢チェック無料",
+    creative: {
+      headline: "その不調、姿勢からかもしれません。",
+      body: "AI姿勢分析で今の姿勢を見える化。秋のキャンペーン期間中は初回姿勢チェックが無料です。",
+      visual: "白背景・自然光。姿勢分析の画面と施術シーン。ブランドカラーのグリーンを1点だけ使う",
+    },
+    localizationRules: [
+      "見出しとキャンペーン名は本部の表記を変えない",
+      "冒頭に店舗のエリア名を入れる",
+      "店舗独自のオファーがあれば最後に1つだけ追記する",
+      "ハッシュタグに店舗のローカルキーワードを必ず含める",
+      "「治る」「必ず改善」などの断定表現は使わない",
+    ],
+  };
+}

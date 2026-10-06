@@ -43,3 +43,15 @@ export const CAMPAIGN_STATUS_LABELS: Record<CampaignStatus, string> = {
   paused: "停止中",
   needs_review: "要確認",
 };
+
+export const ACCOUNT_GOAL_LABELS: Record<import("./types").AccountGoal, string> = {
+  acquisition: "集客",
+  recruitment: "採用",
+  branding: "ブランディング",
+};
+
+export const HQ_STATUS_LABELS: Record<import("./types").HqCampaignStatus, string> = {
+  draft: "準備中",
+  active: "実施中",
+  ended: "終了",
+};
