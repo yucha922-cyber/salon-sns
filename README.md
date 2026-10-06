@@ -1,82 +1,218 @@
-# NAORU AI マーケティングパートナー (Frontend MVP)
+# NAORU AI マーケティングパートナー (SaaS MVP)
 
-サロン・整体・美容事業者を最初の対象にした、AI SNS / 広告運用プラットフォームのデモです。ビジネスプロフィール（Brand Brain）をもとに、SNS運用、広告分析、クリエイティブ制作を支援する体験を、外部APIなしで操作できます。
+## Product overview
 
-## 起動方法
+サロン・整体・美容事業者向けの **AI SNS / 広告運用プラットフォーム** です。
+ユーザーはアカウントを作成し、自社情報（Brand Brain）を登録すると、自社を理解した「専属AIマーケター」に相談し、SNS投稿を生成して投稿カレンダーに登録できます。
 
-依存パッケージ不要の静的フロントエンドです。`index.html` をブラウザで開くか、リポジトリのルートで簡易HTTPサーバーを起動してください。
-
-```sh
-python3 -m http.server 8000
+```
+Sign up / Login → Organization作成 → Business Profile入力（6ステップ）→ Brand Brain保存
+→ Dashboard → AI Marketing Chat → AI Post Creator → SNS Plannerへ保存
 ```
 
-ブラウザで `http://localhost:8000` を開くと、NAORU 渋谷店のデモデータで操作できます。Google Fontsの接続がない環境ではシステムフォントにフォールバックします。
+外部SNS API（Instagram / Meta広告など）への接続と、広告の自動変更は **まだ行いません**。
 
-## 実装した機能
+## Tech stack
 
-- **ダッシュボード** — SNS投稿数、フォロワー増加、リーチ、エンゲージメント、広告費、CTR、CPA、ROAS、推移グラフ、AIの今日の提案、直近投稿とキャンペーン。
-- **投稿カレンダー** — 月表示、月移動、投稿イベント表示、日付から投稿作成、AIによる1ヶ月分の投稿案作成フロー。
-- **AI投稿作成** — SNS、形式、テーマ、目的、対象、トーンの設定、SNS投稿プレビュー、生成・下書き・カレンダー追加操作。
-- **投稿一覧** — 予約済み・下書き・確認待ちのフィルター、投稿情報一覧。
-- **広告ダッシュボード** — Campaign / Ad Set / Creativeのタブ、費用・表示・CTR・CV・CPA・ROAS、推移グラフ、AI分析。
-- **AI分析** — 広告のクリエイティブ疲労やSNS投稿の成長機会、Human-in-the-loopの改善提案と承認UI。
-- **Creative Studio** — 目的・サービス・ターゲット・悩み・媒体・ニュアンスを選び、4つの広告コンセプトから選択してCreative生成に進むUI。
-- **AIマーケター** — Brand Brainと今月の運用データを参照する想定のチャット。投稿相談やCPA分析などのデモ応答。
-- **Brand Brain** — 会社・店舗、業種、所在地、サービス価格、強み、競合、ペルソナ、ブランドイメージ、投稿トーン、参考素材、業種ガイド。
-- **設定** — 業種やワークスペース、承認ワークフローの設定UI。
-- **レスポンシブ** — PCを主軸に、モバイルではサイドバーと主要コンテンツを最適化。
+| 領域 | 採用技術 |
+|---|---|
+| Framework | Next.js 15 (App Router, Server Components, Server Actions) |
+| Language | TypeScript (strict, `noUncheckedIndexedAccess`) |
+| Styling | 既存デザインシステムのCSS（`app/globals.css`）をそのまま移植 |
+| Auth / DB | Supabase (Auth, PostgreSQL, Row Level Security) / `@supabase/ssr` |
+| Validation | zod（フォーム入力・Server Action・AI構造化出力） |
+| AI | Provider抽象（Anthropic SDK / OpenAI HTTP / Mock） |
+| Test | Vitest（unit）, Playwright（E2E）, SQLのRLSテスト |
 
-ナビゲーション、フィルター、カレンダー移動、フォーム選択、モーダル、トースト、チャット、コンセプト選択などを操作できます。広告の承認UIは、承認しただけで配信設定や広告費を変更しないデモ動作です。
+> Tailwind は使っていません。既存UIのクラス設計（`.panel` `.metric-card` など）が完成度高く、置き換えるとデザインが崩れるリスクが大きいためです。
 
-## ディレクトリ構成
+## Architecture
+
+```
+Browser (Client Components)
+   │  Server Actions（zodで入力検証）
+   ▼
+app/actions/*  ──►  lib/auth/context.ts  … ログインユーザー＋所属組織を解決（Cookieは所属組織の中から選ぶだけ）
+   │
+   ├─► lib/data/repository.ts（DataRepository interface）
+   │      ├─ SupabaseRepository … ユーザーのJWTでクエリ → RLSでテナント分離
+   │      └─ DemoRepository     … Supabase未設定時。メモリ保存＋明示的なメンバーシップ検証
+   │
+   └─► lib/ai/*  … AIProvider interface ＋ prompts（buildBrandContext() で共通コンテキスト）
+```
+
+- UIは repository / AI SDK を直接呼びません。すべて Server Action 経由です。
+- API キーは `server-only` モジュールからのみ参照し、クライアントへ露出しません。
+- ルート保護は `middleware.ts`（一次ゲート）＋ 各ページ/Actionでのセッション再検証（二重チェック）。
+
+## Directory structure
 
 ```text
-.
-├── index.html       # アプリシェル、サイドバー、ヘッダー
-├── styles.css       # デザインシステムとレスポンシブレイアウト
-├── app.js           # 画面、モックドメインデータ、ナビゲーション、操作
-├── README.md        # 機能・構成・API接続・ロードマップ
-├── naoru_shibuya_video.html # 既存の独立した動画デモ（変更なし）
-└── NAORU_Shibuya.imovielibrary/ # 既存素材（変更なし）
+app/
+  (auth)/login, (auth)/signup   ログイン・新規登録
+  auth/callback                 Supabaseのメール確認コールバック
+  onboarding/                   6ステップのオンボーディング（/complete で完成画面）
+  (app)/                        ログイン必須の製品画面（共通シェル）
+    dashboard planner creator posts ads analysis studio chat brand settings
+  actions/                      Server Actions（auth, organization, brand, ai, posts）
+components/
+  shell/ ui/ auth/ onboarding/ brand/ chat/ creator/ posts/ ads/ studio/ settings/
+lib/
+  domain/        Domain type・zodスキーマ・ラベル・日付（JST）
+  brand/         buildBrandContext(), 業種プリセット
+  ai/            provider.ts, anthropic.ts, openai.ts, mock.ts, schemas.ts, prompts/
+  data/          Repository interface と Supabase / Demo 実装
+  auth/          認証ファサード、組織コンテキスト、Demoセッション
+  supabase/      server/middleware クライアント、Database型
+  services/      組織（デモ組織作成）、分析リードモデル、エラー変換
+  demo/seed.ts   デモ組織「NAORU整体 渋谷院」データ
+supabase/
+  migrations/    スキーマ＋RLS＋RPC
+  tests/         RLS（テナント分離）テスト
+tests/           Vitest
+e2e/             Playwright（主要フロー）
+middleware.ts    ルート保護
 ```
 
-このリポジトリにはアプリ用の既存フレームワークや依存関係がなかったため、今回のデモは追加依存なしで即時起動できるSPAとして作成しています。規模拡大時はNext.js App Router / TypeScript / Tailwind CSSへ段階的に移行できます。
+## Database schema
 
-## データモデルと拡張性
+`supabase/migrations/20261006000000_init.sql`。全テーブル UUID 主キー・`created_at`/`updated_at`（トリガーで自動更新）。
 
-モックは `app.js` の `brand`、`campaigns`、`posts` を起点にしています。`brand.industry` は `key`、画面表示名、業種別のAIガイドを分け、業種でAIの挙動を変える構造です。サロン固有の文言・データをUIロジックに埋め込みすぎないよう、将来は以下の概念に分割します。
+| 区分 | テーブル |
+|---|---|
+| ユーザー・組織 | `profiles`, `organizations`(`is_demo`), `organization_members`(role: owner/admin/editor/viewer) |
+| Brand Brain | `brands`, `business_profiles`, `locations`, `target_audiences`, `personas`, `services`, `competitors`, `brand_assets`, `social_accounts` |
+| SNS | `posts`(status: draft/scheduled/published/failed), `post_schedules` |
+| 広告 | `campaigns`, `ad_sets`, `ads`, `creatives`, `metrics` |
+| AI | `ai_recommendations`(承認ステータス), `ai_conversations`, `ai_messages` |
 
-- `Organization` → `User` / `Membership`
-- `Brand` → `IndustryProfile` / `AudiencePersona` / `BrandAsset`
-- `Location` → `SocialAccount`
-- `Post` → `PostVariant` / `PostMetric`
-- `Campaign` → `AdSet` → `Ad` → `Creative`
-- `Metric` — 対象、期間、指標名、値、取得元を保持
-- `AIRecommendation` — 根拠、提案、影響範囲、状態（draft / pending_approval / approved / dismissed / applied）を保持
+RPC:
+- `create_organization(name, is_demo)` — 組織・owner権限・空のBrand Brainを原子的に作成
+- `save_brand_brain(brand_id, payload)` — Brand Brain全体を1トランザクションで保存（SECURITY INVOKER = RLS適用）
 
-複数店舗を持つOrganizationで、Brandを共有しつつ店舗・SNSアカウント・キャンペーンをLocationに紐付けられる構成を想定します。
+今回アプリが読み書きしているのは ユーザー・組織・Brand Brain・SNS・AI会話 のテーブルです。広告系テーブルは将来の同期先として定義のみ。
 
-## Backend / API接続が必要な箇所
+## Authentication flow
 
-1. **認証・テナント境界** — Supabase Auth、Organization/Membership、ロール、店舗切り替え、Row Level Security。
-2. **Brand Brain永続化** — PostgreSQLのBrand/Location/Service/Persona、参考素材ストレージ、業種別システム指示とブランド更新履歴。
-3. **SNS連携** — Instagram / Threads / TikTok / Facebook OAuth、投稿予約・公開状態、インサイト取得。APIごとの権限・審査要件も確認が必要。
-4. **広告連携** — Meta Marketing API等からCampaign/AdSet/Ad/Creative/Metricを同期。通貨、アトリビューション窓、取得時刻を明示。
-5. **AI provider abstraction** — `MarketingAssistant`、`PostGenerator`、`AdAnalyst`、`CreativeProvider` の境界を設け、OpenAI / Anthropic等を環境設定で差し替える。Brand Brainと業種ガイドはprovider共通コンテキストにする。
-6. **画像・動画生成** — Creative Studioの生成キュー、provider、アセット保存、再生成、利用枠を接続。
-7. **人の承認フロー** — Recommendationの提案・承認・適用を分離。承認者、対象の変更差分、監査ログ、取り消し方法をサーバー側で保持し、MVPは承認なしで広告変更を行わない。
-8. **計測とレポート** — SNS/広告/予約システムの指標定義、同期ジョブ、失敗表示、レポート生成。
+1. `/signup` → `signUpAction` → Supabase `auth.signUp`（メール確認が有効なら確認メール → `/auth/callback`）
+2. `/login` → `signInAction` → `signInWithPassword`。セッションは `@supabase/ssr` のCookieに保存され、`middleware.ts` が毎リクエストでリフレッシュ（Session persistence）
+3. 未ログインで保護ページへアクセス → `/login?next=...` へリダイレクト（`next` は同一サイトの相対パスのみ許可）
+4. ログイン後、組織がない／オンボーディング未完了 → `/onboarding`
+5. ログアウト → `signOutAction`
 
-## 次に実装する優先順位
+認証ロジックは `lib/auth/service.ts`（ファサード）に集約し、UIからはServer Actionを呼ぶだけです。
 
-1. **Next.js / TypeScriptへの移行とコンポーネント分割** — 画面ルーティング、共通UI、型付きdomain/API層を整備。
-2. **Supabase Auth + マルチテナントDB** — Organization / Location / Brand、初回オンボーディングと権限を実装。
-3. **Brand Brainの保存・編集・参考素材** — 実データが各AI機能に一貫して流れる基盤を作る。
-4. **AI投稿作成とMarketing Chat** — provider adapter、構造化出力、業種ガードレール、生成履歴。
-5. **SNSアカウント接続と投稿予約** — まずInstagram/Threadsから対象APIと審査条件を確定し、手動承認付きで公開。
-6. **Meta広告データ同期と分析** — 読み取り専用から始め、指標の期間比較とAI Recommendationの根拠を実装。
-7. **承認ワークフローとCreative生成** — 監査可能な承認後の操作として段階リリースし、自動変更を最後に検討。
+## Multi tenant architecture
 
-## デモデータについて
+- 1ユーザーは `organization_members` を通じて複数組織に所属できます（サイドバーの組織切替）。
+- テナントデータはすべて `organization_id` を持ち、RLS ポリシー `is_org_member()` / `can_edit_org()` で分離。
+- 子テーブルが別組織の親（brand / post / conversation）を参照できないよう、トリガーで同一組織を強制。
+- 「現在の組織」Cookieは、ユーザーの所属組織の中から選ぶためだけに使い、権限の根拠にはしません。
+- `supabase/tests/rls_test.sql` で「他組織の閲覧・更新・挿入・Brand Brain保存・異組織への紐付け」がすべて拒否されることを検証済み。
 
-画面の店舗、投稿、広告成果、チャット回答はすべてフロントエンド内のモックです。生成、接続、保存、承認、エクスポートの一部はUI上のデモ応答で、外部サービスに対する操作や永続化は行いません。
+## Brand Brain architecture
+
+- 保存項目：会社名 / ブランド名 / 業種（プリセット or 自由入力）/ 事業説明 / Web / SNS（Instagram・Threads・TikTok・Facebook）/ 店舗（複数）/ サービス・説明・価格 / 強み / 特徴 / 競合 / 差別化 / ターゲット（年齢・性別・職業・悩み・利用シーン）/ ペルソナ / ブランドイメージ / トーン / 文章スタイル / 事業・SNS・広告目標 / AIへの補足メモ
+- 業種は `industry_key`（自由なslug）＋表示名で保存。`restaurant` `clinic` `real_estate` なども、コード・スキーマ変更なしで追加可能（`lib/brand/industries.ts` にプリセットとAIガイド）。
+- オンボーディングとBrand Brain編集画面は同じフォーム部品（`components/brand/sections.tsx`）を使い、同じ形で保存します。
+- **`buildBrandContext()`**（`lib/brand/context.ts`）が Business / Brand / Industry / Locations / Services / Target Audience / Personas / Pain Points / Differentiators / Brand Tone / Marketing Goals を構造化し、`formatBrandContext()` が固定順のテキストにします。AI機能はすべてここを通ります。
+
+## AI architecture
+
+```
+lib/ai/
+  provider.ts        AIProvider interface（generateText / generateStructuredObject）
+  anthropic.ts       Anthropic SDK（構造化出力 + サーバー側リフューザルフォールバック）
+  openai.ts          OpenAI Chat Completions（json_schema）
+  mock.ts            APIキーなしで動くMock（各機能のBrand Brain連動モック）
+  schemas.ts         AI出力のzodスキーマ（投稿・広告コンセプト・広告分析）
+  prompts/
+    marketing-chat.ts  post-creator.ts  creative-studio.ts  ad-analysis.ts
+```
+
+- Provider選択：`AI_PROVIDER`（`anthropic` / `openai` / `mock`）。未指定ならキーがあるものを自動選択、なければ Mock。Anthropic のデフォルトモデルは `claude-opus-5-5`（`ANTHROPIC_MODEL` で変更可）。
+- 構造化出力はすべて zod で検証。ユーザー入力は `<user_input>` で囲み、指示の上書きを防止。
+- 共通ガードレール：実績の捏造禁止、効果の断定禁止、広告を自動変更したと言わない。
+- AIマーケターの会話は `ai_conversations` / `ai_messages` に保存し、直近20件を履歴として送信。
+
+## Environment variables
+
+`.env.example` を `.env.local` にコピーして設定します（`.env.local` はコミットしない）。
+
+| 変数 | 用途 |
+|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` | 設定するとSupabaseモード。未設定ならDemoモード |
+| `NEXT_PUBLIC_SITE_URL` | メール確認リンクの戻り先 |
+| `DEMO_SESSION_SECRET` | Demoモードのセッション署名（16文字以上） |
+| `AI_PROVIDER` | `anthropic` / `openai` / `mock` |
+| `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | Anthropic（サーバーのみ） |
+| `OPENAI_API_KEY`, `OPENAI_MODEL` | OpenAI（サーバーのみ） |
+
+## Local setup
+
+```sh
+npm install
+cp .env.example .env.local   # 何も設定しなくてもDemoモードで起動します
+npm run dev                  # http://localhost:3000
+```
+
+Supabaseを使う場合：
+
+1. Supabaseプロジェクトを作成し、`supabase/migrations/*.sql` を SQL Editor で実行（または `supabase db push`）
+2. `.env.local` に URL と anon key を設定
+3. Auth の Site URL / Redirect URL に `http://localhost:3000/auth/callback` を追加
+
+チェック：
+
+```sh
+npm run lint && npm run typecheck && npm test && npm run build
+npm run test:e2e   # ビルド後に実行（Demoモードで起動して主要フローを検証）
+# RLSテスト（ローカルPostgreSQL）
+cat supabase/tests/auth_stub.sql supabase/migrations/*.sql supabase/tests/rls_test.sql | psql -d <scratch_db>
+```
+
+## Demo mode
+
+- Supabase未設定時は **Demoモード**：サーバー内メモリ（開発時は `.demo-data/store.json` に保存）＋署名付きCookie認証。全フローが動作します。
+- ログイン画面の「デモアカウントで試す」で、デモ組織 **NAORU整体 渋谷院**（整体 / Healthcare / Wellness、30代女性・渋谷勤務のデスクワーカー、肩こり・首こり・姿勢・仕事終わりの疲れ、清潔感・専門性・都会的・親しみやすい）にすぐ入れます。
+- 新規ユーザーもオンボーディングやサイドバーから「デモ組織」を追加できます（Supabaseモードでも可）。
+- デモ組織は `organizations.is_demo = true`。SNSリーチや広告成果などのモック数値は **デモ組織にだけ** 表示し、本番組織には未連携の空状態を表示します。
+- AIはAPIキーがなければ Mock Provider が Brand Brain を使ったモック応答を返します。
+
+## 現在実装済み機能
+
+- Sign up / Login / Logout / セッション維持 / 保護ルート / メール確認コールバック
+- Organization作成・複数組織の切替・組織名変更、デモ組織作成
+- 6ステップのオンボーディング（進捗表示・ステップ単位で保存・再開可能）→ Brand Brain完成画面
+- Brand Brain 閲覧・タブ別編集・保存・完成度表示
+- AIマーケター（Brand Brain参照、会話の保存・履歴表示、サジェスト）
+- AI投稿作成（platform / 形式 / テーマ / ターゲット / 目的 / トーン → タイトル・キャプション・CTA・ハッシュタグ生成 → 編集 → 予約/下書きで SNS Planner に保存）
+- 投稿カレンダー（月移動・SNS絞り込み・日付から作成・投稿編集）、投稿一覧（ステータス別）
+- Creative Studio（Brand Brainから4つの広告コンセプトを生成）
+- 広告ダッシュボード / AI分析（デモ組織のみデータ表示、AI再分析、承認UIは記録のみで広告は変更しない）
+- Loading（Skeleton）/ Empty / Error state、Toast、フォームバリデーション、Disabled state
+
+## 未実装機能
+
+- SNS・広告アカウントのOAuth連携、投稿の自動公開、インサイト・広告実績の同期
+- 参考素材アップロード（Supabase Storage）、画像・動画生成
+- メンバー招待・権限管理UI、通知、プラン・請求
+- AI応答のストリーミング、AI利用量の上限・レート制限
+- パスワードリセット、ソーシャルログイン
+
+## 今後必要な external API
+
+| API | 用途 |
+|---|---|
+| Meta Marketing API | Campaign / AdSet / Ad / Creative / 指標の同期（読み取り→承認付き変更） |
+| Instagram Graph API | 投稿の予約公開、インサイト取得 |
+| Threads API | 投稿公開、インサイト |
+| TikTok API (Content Posting / Business) | 動画投稿、広告データ |
+| Facebook Pages API | ページ投稿 |
+| Image generation API | 広告・投稿画像の生成 |
+| Video generation API | Reel / ショート動画の生成 |
+| 予約システム連携（ホットペッパー等） | 予約・CV計測 |
+
+## 旧プロトタイプ
+
+移行前の静的HTML/JSプロトタイプ（`index.html` / `app.js` / `styles.css`）は Git 履歴（commit `562a620` 以降）に残っています。デザインは `app/globals.css` にそのまま移植しています。
