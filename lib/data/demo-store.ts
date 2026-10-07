@@ -28,6 +28,18 @@ import type {
   PublishablePlatform,
   SocialEvent,
 } from "@/lib/social/types";
+import type {
+  AdAccount,
+  AdCampaign,
+  AdCreativeRecord,
+  AdMetricSnapshot,
+  AdRecord,
+  AdSetRecord,
+  AiAdAnalysis,
+  CreativeHypothesis,
+  Experiment,
+  FirstPartyConversion,
+} from "@/lib/ads/types";
 
 /**
  * In-memory data store used when Supabase is not configured.
@@ -66,6 +78,26 @@ export interface DemoStoreData {
   planProposals?: (PlanProposal & { organizationId: ID })[];
   recommendations?: Recommendation[];
   social?: DemoSocialData;
+  ads?: DemoAdsData;
+}
+
+/** Ad optimization loop collections (see lib/ads/demo-store.ts). */
+export interface DemoAdsData {
+  accounts: AdAccount[];
+  credentials: { organizationId: ID; adAccountId: ID; ciphertext: string; expiresAt: string | null; scopes: string[] }[];
+  campaigns: AdCampaign[];
+  adSets: AdSetRecord[];
+  ads: AdRecord[];
+  creatives: AdCreativeRecord[];
+  snapshots: AdMetricSnapshot[];
+  conversions: FirstPartyConversion[];
+  analyses: AiAdAnalysis[];
+  hypotheses: CreativeHypothesis[];
+  experiments: Experiment[];
+}
+
+export function emptyAds(): DemoAdsData {
+  return { accounts: [], credentials: [], campaigns: [], adSets: [], ads: [], creatives: [], snapshots: [], conversions: [], analyses: [], hypotheses: [], experiments: [] };
 }
 
 /** Publishing-loop collections (see lib/social/demo-store.ts). */
@@ -135,6 +167,7 @@ export function getDemoStore(): Required<DemoStoreData> {
   store.planProposals ??= [];
   store.recommendations ??= [];
   store.social ??= emptySocial();
+  store.ads ??= emptyAds();
   // Records persisted before the publishing loop existed.
   for (const post of store.posts) post.publishing ??= { ...EMPTY_PUBLISHING };
   for (const account of store.accounts) account.connection ??= emptyConnection();

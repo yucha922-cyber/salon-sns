@@ -198,6 +198,10 @@ function toRecommendation(row: AiRecommendationRow): Recommendation {
     createdAt: row.created_at,
     source: row.source ?? "operations",
     sourcePostIds: row.source_post_ids ?? [],
+    payload:
+      row.payload && typeof row.payload === "object" && !Array.isArray(row.payload)
+        ? Object.fromEntries(Object.entries(row.payload).filter((e): e is [string, string | number | null] => e[1] === null || typeof e[1] === "string" || typeof e[1] === "number"))
+        : {},
   };
 }
 
@@ -990,6 +994,7 @@ export class SupabaseRepository implements DataRepository {
           confidence: r.confidence,
           source: r.source ?? "operations",
           source_post_ids: r.sourcePostIds ?? [],
+          payload: r.payload ?? null,
         })),
       )
       .select("*");

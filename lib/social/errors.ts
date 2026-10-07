@@ -82,10 +82,11 @@ export function fromGraphError(status: number, body: unknown, context: string, r
   const retryAfter = retryAfterHeader ? Number(retryAfterHeader) || undefined : undefined;
 
   if (code === 190 || (err.type === "OAuthException" && [458, 460, 463, 467].includes(sub))) return new SocialApiError("token_expired", text, { code: codeLabel });
-  if ([4, 17, 32, 613, 80002].includes(code) || sub === 2207042 || status === 429) {
+  // 80000 ads_insights / 80004 ads_management (Marketing API Business Use Case), 613/1487742 ad-account limit
+  if ([4, 17, 32, 613, 80000, 80001, 80002, 80003, 80004, 80005, 80006, 80008, 80014].includes(code) || sub === 2207042 || sub === 1487742 || sub === 2446079 || status === 429) {
     return new SocialApiError("rate_limited", text, { code: codeLabel, retryAfterSeconds: retryAfter ?? 15 * 60 });
   }
-  if (code === 10 || (code >= 200 && code <= 299)) return new SocialApiError("permission", text, { code: codeLabel });
+  if (code === 10 || code === 294 || (code >= 200 && code <= 299)) return new SocialApiError("permission", text, { code: codeLabel });
   if (code === 9007 || sub === 2207027) return new SocialApiError("media_processing", text, { code: codeLabel, retryAfterSeconds: 60 });
   if (code === 9004 || code === 36003 || (sub >= 2207000 && sub < 2208000) || code === 100) {
     // media download failure is often transient (URL fetch); others are content problems

@@ -345,7 +345,7 @@ export class DemoSocialStore implements SocialStore {
   }
 
   async addLearning(organizationId: ID, input: ContentLearningInput): Promise<ContentLearning> {
-    const learning: ContentLearning = { ...clone(input), id: this.idGen(), organizationId, status: "active", createdAt: nowIso() };
+    const learning: ContentLearning = { kind: "content", attributes: {}, sourceExperimentId: null, ...clone(input), id: this.idGen(), organizationId, status: "active", createdAt: nowIso() };
     this.data.learnings.push(learning);
     this.save();
     return clone(learning);
