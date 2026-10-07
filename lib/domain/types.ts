@@ -298,9 +298,11 @@ export interface RecommendationInput {
   /** 0..1 */
   confidence: number;
   /** operations = plan coverage review, performance = derived from real insights */
-  source?: "operations" | "performance" | "manual";
+  source?: "operations" | "performance" | "manual" | "ads";
   /** posts whose metrics back this recommendation */
   sourcePostIds?: ID[];
+  /** links for the UI (ads: hypothesisId / adId / campaignId / findingKind) */
+  payload?: Record<string, string | number | null>;
 }
 
 /** AI proposes, a human approves / rejects / marks completed. */

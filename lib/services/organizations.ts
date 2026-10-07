@@ -4,6 +4,9 @@ import type { Organization, SnsAccount } from "@/lib/domain/types";
 import { getSystemStore } from "@/lib/social/access";
 import type { SocialStore } from "@/lib/social/store";
 import { seedDemoSocial } from "@/lib/demo/social-seed";
+import { seedDemoAds } from "@/lib/demo/ads-seed";
+import { getSystemAdsStore } from "@/lib/ads/access";
+import type { AdsStore } from "@/lib/ads/store";
 import {
   buildDemoHistoryPosts,
   buildDemoHqCampaign,
@@ -19,7 +22,7 @@ import {
  * Creates a fully populated demo organization for the current user.
  * The organization is flagged is_demo so it is never mixed with real data.
  */
-export async function createDemoOrganization(repo: DataRepository, options: { social?: SocialStore | null } = {}): Promise<Organization> {
+export async function createDemoOrganization(repo: DataRepository, options: { social?: SocialStore | null; ads?: AdsStore | null } = {}): Promise<Organization> {
   const organization = await repo.createOrganization(DEMO_ORGANIZATION_NAME, { isDemo: true });
   const brain = await repo.saveBrandBrain(organization.id, DEMO_BRAND_BRAIN, { onboardingStep: 6, completeOnboarding: true });
   const locationIds = brain.locations.map((l) => l.id ?? null);
@@ -62,6 +65,15 @@ export async function createDemoOrganization(repo: DataRepository, options: { so
       await seedDemoSocial(social, repo, organization.id);
     } catch (error) {
       console.error("[demo] social seed failed", error instanceof Error ? error.message : error);
+    }
+  }
+  // Meta ads loop on the MockAdsProvider (ad account, 30 days of Insights, tests, Creative Memory).
+  const ads = options.ads === undefined ? getSystemAdsStore() : options.ads;
+  if (ads) {
+    try {
+      await seedDemoAds(ads, social, repo, organization.id, null);
+    } catch (error) {
+      console.error("[demo] ads seed failed", error instanceof Error ? error.message : error);
     }
   }
   return organization;

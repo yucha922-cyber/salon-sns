@@ -317,7 +317,7 @@ export type AiRecommendationRow = Timestamps & {
   confidence: number;
   decided_by: string | null;
   decided_at: string | null;
-  source: "operations" | "performance" | "manual";
+  source: "operations" | "performance" | "manual" | "ads";
   source_post_ids: string[];
 };
 
@@ -459,6 +459,9 @@ export type ContentLearningRow = Timestamps & {
   source_review_id: string | null;
   status: "active" | "archived";
   created_by: string | null;
+  kind: "content" | "creative";
+  attributes: Json;
+  source_experiment_id: string | null;
 };
 
 export type SocialEventLogRow = {
@@ -474,6 +477,272 @@ export type SocialEventLogRow = {
   details: Json;
   actor_user_id: string | null;
   created_at: string;
+};
+
+export type AdAccountRow = Timestamps & {
+  id: string;
+  organization_id: string;
+  brand_id: string | null;
+  location_id: string | null;
+  provider: "meta";
+  business_id: string | null;
+  external_account_id: string;
+  name: string;
+  currency: string;
+  timezone: string;
+  account_status: string | null;
+  connection_status: "connected" | "expired" | "error" | "disconnected" | "reauthorization_required";
+  scopes: string[];
+  token_expires_at: string | null;
+  last_synced_at: string | null;
+  connection_error: string | null;
+  metadata: Json;
+  connected_by: string | null;
+  connected_at: string | null;
+};
+
+export type AdAccountCredentialRow = Timestamps & {
+  ad_account_id: string;
+  organization_id: string;
+  access_token_ciphertext: string;
+  token_kind: "user" | "system_user";
+  token_expires_at: string | null;
+  scopes: string[];
+  last_refreshed_at: string | null;
+};
+
+export type CampaignRow = Timestamps & {
+  id: string;
+  organization_id: string;
+  brand_id: string | null;
+  location_id: string | null;
+  provider: string;
+  external_id: string | null;
+  name: string;
+  objective: string | null;
+  status: string;
+  daily_budget: number | null;
+  currency: string;
+  ad_account_id: string | null;
+  goal: GoalEnum;
+  effective_status: string | null;
+  lifetime_budget: number | null;
+  special_ad_categories: string[];
+  landing_page_url: string | null;
+  start_time: string | null;
+  stop_time: string | null;
+  conversion_event: string | null;
+  last_synced_at: string | null;
+  raw: Json;
+};
+
+export type AdSetRow = Timestamps & {
+  id: string;
+  organization_id: string;
+  campaign_id: string;
+  external_id: string | null;
+  name: string;
+  status: string;
+  targeting: Json | null;
+  location_id: string | null;
+  effective_status: string | null;
+  optimization_goal: string | null;
+  billing_event: string | null;
+  daily_budget: number | null;
+  promoted_object: Json | null;
+  audience_label: string;
+  last_synced_at: string | null;
+  raw: Json;
+};
+
+export type AdRow = Timestamps & {
+  id: string;
+  organization_id: string;
+  ad_set_id: string;
+  creative_id: string | null;
+  external_id: string | null;
+  name: string;
+  status: string;
+  campaign_id: string | null;
+  location_id: string | null;
+  effective_status: string | null;
+  landing_page_url: string | null;
+  provider_created_at: string | null;
+  review_feedback: Json | null;
+  last_synced_at: string | null;
+  raw: Json;
+};
+
+export type CreativeRow = Timestamps & {
+  id: string;
+  organization_id: string;
+  brand_id: string | null;
+  concept: string;
+  headline: string;
+  body: string;
+  cta: string;
+  format: string | null;
+  asset_id: string | null;
+  status: string;
+  ad_account_id: string | null;
+  location_id: string | null;
+  external_id: string | null;
+  source: "synced" | "ai_generated" | "manual";
+  goal: string | null;
+  hook: string;
+  angle: string;
+  persona: string;
+  pain_point: string;
+  offer: string;
+  first_view_copy: string;
+  visual_direction: string;
+  video_script: Json | null;
+  brief: Json | null;
+  thumbnail_url: string | null;
+  landing_page_url: string | null;
+  hypothesis_id: string | null;
+  parent_creative_id: string | null;
+  variable_changed: string | null;
+  approved_by: string | null;
+  approved_at: string | null;
+  rejected_reason: string | null;
+  ai_provider: string | null;
+};
+
+export type AdMetricSnapshotRow = {
+  id: string;
+  organization_id: string;
+  ad_account_id: string | null;
+  location_id: string | null;
+  entity_type: "account" | "campaign" | "ad_set" | "ad";
+  entity_id: string;
+  date: string;
+  date_stop: string;
+  spend: number;
+  impressions: number;
+  reach: number | null;
+  frequency: number | null;
+  clicks: number;
+  landing_page_views: number | null;
+  conversions: number;
+  revenue: number | null;
+  video_3s_views: number | null;
+  thruplays: number | null;
+  ctr: number | null;
+  cpc: number | null;
+  cpm: number | null;
+  cvr: number | null;
+  cpa: number | null;
+  roas: number | null;
+  raw_metrics: Json;
+  source: "provider" | "mock";
+  captured_at: string;
+  created_at: string;
+};
+
+export type AdConversionRow = {
+  id: string;
+  organization_id: string;
+  location_id: string | null;
+  campaign_id: string | null;
+  ad_id: string | null;
+  kind: "lead" | "reservation" | "visit" | "contract" | "application" | "revenue";
+  occurred_on: string;
+  count: number;
+  revenue: number | null;
+  source: "manual" | "csv" | "api";
+  note: string;
+  created_by: string | null;
+  created_at: string;
+};
+
+export type AiAdAnalysisRow = {
+  id: string;
+  organization_id: string;
+  location_id: string | null;
+  campaign_id: string | null;
+  period_start: string;
+  period_end: string;
+  summary: string;
+  findings: Json;
+  ai_provider: string | null;
+  created_by: string | null;
+  created_at: string;
+};
+
+export type CreativeHypothesisRow = Timestamps & {
+  id: string;
+  organization_id: string;
+  location_id: string | null;
+  analysis_id: string | null;
+  campaign_id: string | null;
+  ad_set_id: string | null;
+  ad_id: string | null;
+  goal: string;
+  problem: string;
+  hypothesis: string;
+  change_variable: string;
+  test_idea: string;
+  expected_result: string;
+  primary_metric: string;
+  confidence: number;
+  status: string;
+  decided_by: string | null;
+  decided_at: string | null;
+};
+
+export type ExperimentRow = Timestamps & {
+  id: string;
+  organization_id: string;
+  location_id: string | null;
+  campaign_id: string | null;
+  ad_set_id: string | null;
+  hypothesis_id: string | null;
+  name: string;
+  goal: string;
+  variable: string;
+  hypothesis: string;
+  primary_metric: string;
+  secondary_metrics: string[];
+  criteria: Json;
+  control_variant_id: string | null;
+  status: "draft" | "approved" | "running" | "completed" | "cancelled";
+  decision: "winner" | "inconclusive" | "insufficient_data" | null;
+  winner_variant_id: string | null;
+  result_summary: Json | null;
+  start_date: string | null;
+  end_date: string | null;
+  approved_by: string | null;
+  approved_at: string | null;
+  launched_by: string | null;
+  launched_at: string | null;
+  completed_by: string | null;
+  completed_at: string | null;
+  created_by: string | null;
+};
+
+export type ExperimentVariantRow = Timestamps & {
+  id: string;
+  organization_id: string;
+  experiment_id: string;
+  role: "control" | "challenger";
+  label: string;
+  creative_id: string | null;
+  ad_id: string | null;
+  provider_ad_id: string | null;
+  variable_changed: string;
+  spend: number;
+  impressions: number;
+  clicks: number;
+  conversions: number;
+  revenue: number | null;
+  frequency: number | null;
+  ctr: number | null;
+  cvr: number | null;
+  cpa: number | null;
+  roas: number | null;
+  decision: "winner" | "loser" | "inconclusive" | "insufficient_data" | null;
+  metrics_updated_at: string | null;
 };
 
 export type AiConversationRow = Timestamps & {
@@ -536,6 +805,18 @@ export type Database = {
       post_performance_reviews: Table<PostPerformanceReviewRow, "organization_id" | "post_id" | "summary" | "confidence">;
       content_learnings: Table<ContentLearningRow, "organization_id" | "learning" | "confidence">;
       social_event_logs: Table<SocialEventLogRow, "organization_id" | "event_type">;
+      ad_accounts: Table<AdAccountRow, "organization_id" | "external_account_id">;
+      ad_account_credentials: Table<AdAccountCredentialRow, "ad_account_id" | "organization_id" | "access_token_ciphertext">;
+      campaigns: Table<CampaignRow, "organization_id" | "name">;
+      ad_sets: Table<AdSetRow, "organization_id" | "campaign_id" | "name">;
+      ads: Table<AdRow, "organization_id" | "ad_set_id" | "name">;
+      creatives: Table<CreativeRow, "organization_id">;
+      ad_metric_snapshots: Table<AdMetricSnapshotRow, "organization_id" | "entity_type" | "entity_id" | "date" | "date_stop">;
+      ad_conversions: Table<AdConversionRow, "organization_id" | "kind" | "occurred_on">;
+      ai_ad_analyses: Table<AiAdAnalysisRow, "organization_id" | "period_start" | "period_end">;
+      creative_hypotheses: Table<CreativeHypothesisRow, "organization_id" | "problem" | "hypothesis" | "change_variable" | "confidence">;
+      experiments: Table<ExperimentRow, "organization_id" | "name" | "variable">;
+      experiment_variants: Table<ExperimentVariantRow, "organization_id" | "experiment_id" | "role" | "label">;
     };
     Views: { [_ in never]: never };
     Functions: {

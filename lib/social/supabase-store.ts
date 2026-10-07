@@ -171,6 +171,9 @@ function toLearning(r: ContentLearningRow): ContentLearning {
     sourceReviewId: r.source_review_id,
     status: r.status,
     createdAt: r.created_at,
+    kind: r.kind ?? "content",
+    attributes: Object.fromEntries(Object.entries(asObject(r.attributes)).filter((e): e is [string, string] => typeof e[1] === "string")),
+    sourceExperimentId: r.source_experiment_id ?? null,
   };
 }
 
@@ -647,6 +650,9 @@ export class SupabaseSocialStore implements SocialStore {
         source_post_ids: input.sourcePostIds,
         source_review_id: input.sourceReviewId,
         created_by: createdBy,
+        kind: input.kind ?? "content",
+        attributes: toJson(input.attributes ?? {}),
+        source_experiment_id: input.sourceExperimentId ?? null,
       })
       .select("*")
       .single();

@@ -141,3 +141,59 @@ export const performanceReviewSchema = z.object({
     .nullable(),
 });
 export type PerformanceReviewOutput = z.infer<typeof performanceReviewSchema>;
+
+// ---------------------------------------------------------------------------
+// Ad optimization loop (lib/ads)
+// ---------------------------------------------------------------------------
+export const adNarrativeSchema = z.object({
+  summary: z.string().max(800),
+  items: z
+    .array(
+      z.object({
+        findingId: z.string().max(200),
+        explanation: z.string().max(500),
+        testIdea: z.string().max(400),
+        expectedResult: z.string().max(300),
+      }),
+    )
+    .max(20),
+});
+export type AdNarrative = z.infer<typeof adNarrativeSchema>;
+
+const sceneSchema = z.object({ seconds: z.string().max(20), visual: z.string().max(200), onScreenText: z.string().max(80), narration: z.string().max(200) });
+
+export const creativeSetSchema = z.object({
+  brief: z.object({
+    goal: z.string().max(120),
+    persona: z.string().max(200),
+    painPoint: z.string().max(120),
+    coreMessage: z.string().max(200),
+    hook: z.string().max(80),
+    angle: z.string().max(40),
+    proof: z.string().max(200),
+    cta: z.string().max(40),
+    visualDirection: z.string().max(300),
+    sceneStructure: z.array(z.string().max(120)).max(8),
+    requiredAssets: z.array(z.string().max(120)).max(8),
+    forbiddenExpressions: z.array(z.string().max(120)).max(10),
+    brandTone: z.string().max(200),
+    policyNotes: z.array(z.string().max(200)).max(8),
+  }),
+  variants: z
+    .array(
+      z.object({
+        label: z.enum(["B", "C"]),
+        angle: z.string().max(40),
+        hook: z.string().max(80),
+        headline: z.string().max(80),
+        primaryText: z.string().max(400),
+        cta: z.string().max(40),
+        firstViewCopy: z.string().max(60),
+        visualDirection: z.string().max(300),
+        videoScript: z.object({ hook: z.string().max(80), scenes: z.array(sceneSchema).max(6) }),
+        rationale: z.string().max(300),
+      }),
+    )
+    .length(2),
+});
+export type CreativeSetOutput = z.infer<typeof creativeSetSchema>;

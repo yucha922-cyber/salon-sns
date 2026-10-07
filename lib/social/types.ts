@@ -299,6 +299,11 @@ export interface ContentLearningInput {
   validUntil: string | null;
   sourcePostIds: ID[];
   sourceReviewId: ID | null;
+  /** content = organic SNS (Marketing Memory), creative = ad creative tests (Creative Memory) */
+  kind?: "content" | "creative";
+  /** structured pattern (persona / hook / angle / variable / winningPattern / why …) */
+  attributes?: Record<string, string | undefined>;
+  sourceExperimentId?: ID | null;
 }
 
 export interface ContentLearning extends ContentLearningInput {
@@ -329,6 +334,28 @@ export const SOCIAL_EVENT_TYPES = [
   "recommendation_approved",
   "recommendation_rejected",
   "webhook_received",
+  // ad optimization loop (lib/ads)
+  "ad_account_connected",
+  "ad_account_disconnected",
+  "ads_synced",
+  "ads_sync_failed",
+  "ad_analysis_generated",
+  "hypothesis_generated",
+  "hypothesis_accepted",
+  "hypothesis_rejected",
+  "creative_draft_generated",
+  "creative_approved",
+  "creative_rejected",
+  "creative_edited",
+  "experiment_created",
+  "experiment_approved",
+  "experiment_started",
+  "experiment_completed",
+  "experiment_cancelled",
+  "winner_selected",
+  "ad_paused",
+  "ad_activated",
+  "conversions_recorded",
 ] as const;
 export type SocialEventType = (typeof SOCIAL_EVENT_TYPES)[number];
 

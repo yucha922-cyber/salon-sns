@@ -380,6 +380,102 @@ UIはproviderを直接呼びません（Server Action → service → provider�
 - 既存テーブル（投稿・アカウントなど）のRLSは組織単位。店舗単位のRLSは新テーブルのみで、既存テーブルはアプリ側で絞り込み。
 
 
+## Meta広告 × AI改善ループ（Human-in-the-loop）
+
+「数字を表示するダッシュボード」ではなく、広告担当者が毎日やっている
+**データ取得 → 問題検知 → 原因仮説 → Creative仮説 → Creative生成 → 人のApprove → A/Bテスト → 結果判定 → 勝ちパターン学習 → 次のCreativeへ反映**
+をAIが代行し、人は判断と承認だけを行う設計です。AIは提案のみで、配信・予算・ターゲティング・停止は **人の承認なしに一切実行しません**。
+
+### Meta Marketing API Architecture
+
+```
+UI (app/(app)/ads/*, /studio, /analysis)  ── server actions (app/actions/ads.ts)
+        │  権限チェック: lib/ads/app.ts → lib/ads/access.ts
+        ▼
+Services  lib/ads/sync.ts · analysis.ts · creatives.ts · experiment-service.ts · connect.ts · worker.ts
+        │                      │
+        ▼                      ▼
+AdsProvider (lib/ads/provider.ts)         AdsStore (lib/ads/store.ts)
+ ├ MetaAdsProvider  lib/ads/meta/*         ├ SupabaseAdsStore（RLS / service role）
+ └ MockAdsProvider  lib/ads/mock/*         └ DemoAdsStore（Demo Mode）
+Pure engines: metrics.ts（指標モデル）· diagnosis.ts（Baseline / Funnel / Fatigue）· experiments.ts（Winner判定）· policy.ts · creative-memory.ts
+```
+
+- `AdsProvider` は connect / syncCampaigns / syncAdSets / syncAds / syncCreatives / syncInsights / createCreativeDraft / createAdDraft / createExperiment / pauseAd / activateAd / getPreview のみ。**予算変更・ターゲティング変更・キャンペーン削除のメソッドは存在しません**（MVPでは作らない）。
+- `lib/ads/meta/`: `client.ts`（Graph呼び出し・ページング）, `auth.ts`（Facebook Login for Business / 長期トークン / debug_token / 広告アカウント一覧）, `campaigns.ts`, `insights.ts`, `creatives.ts`, `experiments.ts`, `mapper.ts`（Insights → 共通指標）。
+- アクセストークンは `ad_account_credentials`（RLS有効・ポリシーなし・grant剥奪）に AES-256-GCM で暗号化保存。OAuth途中の候補一覧も暗号化した httpOnly Cookie で保持し、ブラウザには平文で渡しません。
+
+### Ad Data Sync
+
+- 接続時に過去30日、以降は日次 Cron（`/api/cron/ads`）で **直近28日を再取得**（Metaはアトリビューションで過去日の数値を更新するため）。
+- 構造: campaign → ad set → creative → ad を external id で upsert。目的・LP URL・店舗・CVイベントなど **人が決める項目は同期で上書きしません**（DBトリガー `guard_ad_sync_fields` でユーザー側からの同期項目・予算・配信状態の書き換えも禁止）。
+- Insights: `time_increment=1`、level = account / campaign / adset / ad。廃止された 7d_view / 28d_view は要求しません。
+
+### Metrics Model
+
+`ad_metric_snapshots`（entity × 日付で一意）に Spend, Impressions, Reach, Frequency, Link Clicks, LPV, CV, Revenue, 3秒動画再生, ThruPlay を保存し、CTR / CPC / CPM / CVR / CPA / ROAS を算出。CVはキャンペーンのCVイベント（Schedule / Lead / SubmitApplication / custom:ID …）に対応する action_type の **最初に一致したもの1つ** だけを数え、二重計上しません。自社計測（予約・来店・契約・応募・売上）は `ad_conversions` に別保存し、Meta計測とは合算しません（手入力 / CSV）。
+
+### Baseline Engine / AI Ad Analysis
+
+- 単一の数値では判断しません。自分の 直近3日 / 7日 / 前7日 / 14日 / 30日、同じ広告セット・キャンペーン・アカウント・同じ目的・同じ切り口（angle）の平均と比較します（`lib/ads/diagnosis.ts`）。
+- Funnel: Impression → Click(CTR) → LP到達(LPV率) → CV(LP CVR)。CTR低下→Creative、CTR維持でLP CVR低下→LP/オファー、CTR上昇なのにCPA悪化→CPC/オーディエンス/CV、を切り分けます。
+- Creative fatigue は Frequency↑・CTR↓・CPC↑・CPA↑・配信日数・配信量・CVR維持 の組み合わせで判定（例:「広告Aは過去7日でFrequencyが2.1→2.8へ上昇し、CTRが23%低下しています」）。
+- 出力は Observation / Problem / Possible Cause / Evidence / Hypothesis / Recommended Action / Expected Impact / Confidence / Priority。数値はルールエンジンが計算し、AIは要約・優先順位の説明・テスト案の文章化だけを担当（AIが失敗してもルールベースで動作）。
+
+### Creative Hypothesis / Creative Generation
+
+- 1テスト＝1変数（Hook / Visual / Persona / Offer / CTA / Social Proof / Before-After / Problem Angle / Expertise Angle / Price / Format / LP）。予算は変数に含めません（DBのcheck制約でも禁止）。
+- 「Creative案を作る」でブランド・店舗・ペルソナ・課題・仮説・現行Creative・実績・Creative Memoryを引き継いで Creative Studio が開きます（再入力不要）。Creative Brief（Goal / Persona / Pain / Core Message / Hook / Angle / Proof / CTA / Visual / Scene / Assets / 禁止表現 / Tone / Metaポリシー）→ B / C 案（Headline / Primary Text / CTA / First View / Visual / 動画Hook・4シーン構成）。
+- 生成直後は `in_review`。Approve / Edit（再承認が必要）/ Reject / Regenerate。**承認済みCreativeしかテストに使えません**。`lib/ads/policy.ts` が「その肩こり」「○○に悩むあなたへ」等の個人属性表現、医療的効果の断定、採用広告の年齢・性別限定を警告します。
+- 画像・動画生成は Visual Direction / Script までをAIが作り、素材はアップロード前提（生成プロバイダは今後 AdsProvider と同様に差し替え可能にする予定）。
+
+### Experiment System / Winner Detection
+
+- 状態: draft → approved（テストプラン承認）→ **最終確認（Metaへ反映）** → running → completed / cancelled。最終確認は owner / admin / 店舗マネージャーのみ。既存の広告セットにChallenger広告を作るだけで、予算・ターゲティングは変更しません（ACTIVE で開始 / PAUSED で作成して後で開始を選択）。
+- 同じ広告セット内の比較のため厳密なランダム割付ではありません（UIに明記）。同じ広告セットで同時に複数テストは作れません。
+- Winner: 主KPI（集客=CPA、採用=応募単価）で Control より15%以上良く、各案が最低費用・表示・クリック・CV・実施日数を満たし、CVR（CTRテストはCTR）の差の確度が80%以上、Frequencyがガードレール以下。満たさなければ `insufficient_data`（不足項目を表示）または `inconclusive`。**勝者を無理に決めません**。完了は人が確定し、負け広告の停止も任意・承認制です。
+
+### Creative Learning / Creative Memory
+
+- テスト完了時に `content_learnings`（kind = `creative`）へ保存: persona / pain / hook / angle / visual / CTA / offer / format / platform / location / industry / goal / variable / winningPattern / losingPattern / principle / why、信頼度、元テストID。
+- Brand Brain = 会社の事実、Marketing Memory = SNS運用の学び、Creative Memory = 広告Creativeの勝ちパターン。
+- 次の生成では勝ちパターンを **原則** として使い、表現は変えます（「仕事終わり」が勝った → 「PC作業8時間後」「定時後の30分」…）。既存Hookと類似（文字bigram類似度0.6超）の案は作らず、Creative Angle（Problem / Desire / Before-After / Expertise / Social Proof / Myth Busting / How-to / Comparison / Urgency / Offer / Lifestyle / Identity、採用は Career / Culture / Training / Salary / Global Opportunity / Employee Story）を散らします。
+
+### Human Approval（AI単独で禁止していること）
+
+| 操作 | AI単独 | 必要な承認 |
+|---|---|---|
+| データ取得・分析・仮説・Creative案 | ○ | – |
+| Creativeの承認 | × | editor以上（承認者を記録） |
+| テストプラン承認 | × | editor以上 |
+| Metaへ広告作成・配信開始 | × | owner / admin / 店舗マネージャー＋最終確認ダイアログ |
+| 広告の停止 | × | 同上（テスト完了時に任意で選択） |
+| 予算増減・キャンペーン停止/削除・ターゲティング変更・大量生成/大量公開 | × | 機能自体を提供しない（Ads Managerで人が実施） |
+
+イベントログ（`social_event_logs`）: ad_account_connected / ads_synced / ad_analysis_generated / recommendation_generated / hypothesis_* / creative_draft_generated / creative_approved / experiment_created / experiment_approved / experiment_started / experiment_completed / winner_selected / learning_saved / ad_paused / ad_activated / conversions_recorded（actor_user_id = 操作した人）。
+
+### Mock Ads Mode
+
+Demo Mode・デモ組織・`ADS_PROVIDER_MODE=mock` では `MockAdsProvider`。NAORU整体の広告アカウント（渋谷院 新規集客 / 池袋院 / 横浜院 産後骨盤 / 本部 セラピスト採用）、30日分の日別データ（日付は常に「今日」基準）、疲労したCreative A「その肩こり、揉むだけになっていませんか？」、実施中のA/Bテスト（A vs B「仕事終わり、首肩が限界になるあなたへ」、データ不足）、LP起因でCVRが落ちた広告、予算未消化キャンペーン、完了済みの採用テスト（社員ストーリーが研修訴求に勝利→Creative Memory）が入っています。Metaには何も送信しません。
+
+### Meta App Setup / Required Permissions / App Review
+
+1. Meta App（ビジネス）を作成し「Marketing API」と「Facebook Login for Business」を追加。
+2. Facebook Login for Business で構成（Configuration）を作成：権限 `ads_read`, `ads_management`, `business_management`（Creative作成に使うページの `pages_show_list`, `pages_read_engagement` も必要に応じて）。構成IDを `META_ADS_CONFIG_ID` に設定。
+3. Valid OAuth Redirect URIs に `https://<domain>/api/ads/callback` を登録。
+4. 自社の広告アカウントだけなら開発モード＋Standard Accessで可。**他社（加盟店など）の広告アカウントを扱うには Advanced Access（App Review）とビジネス認証**が必要。Marketing API Access Tier（Limited → Full）は API利用実績（直近15日で500コール以上、エラー率15%未満）で昇格します。
+5. App Review では「広告データの閲覧と分析」「人が承認したテスト広告の作成・停止」の画面録画、データ削除手順、プライバシーポリシーURLを提出。
+6. 2026-10-27以降、特別広告カテゴリ（EMPLOYMENT等）の広告セット作成には advantage_audience の明示が必要（MVPは既存広告セットに広告を追加するだけなので影響なし。広告セット作成を実装する際は対応必須）。
+
+### Production Limitations
+
+- A/Bは同一広告セット内の比較（ランダム化されたSplit Testではない）。厳密な検証は ad_studies（別広告セット）が必要。
+- Visual / Format テストは素材アップロードUI未実装のため自動作成不可（コピー系の変数のみ）。
+- Insights は同期API（日別・28日）。大規模アカウントでは非同期レポート（report_run_id）への切り替えが必要。
+- Offline Conversions API は廃止済み。自社計測CVをMetaに返すには Conversions API（action_source=physical_store 等）が必要（未実装、現在は手入力/CSVのみ）。
+- Mock の作成広告はサーバーインスタンスのメモリに保持（サーバーレス環境では再起動で配信データが消える）。
+- 既存テーブル（campaigns / ad_sets / ads / creatives）のRLSは組織単位（店舗スコープは新テーブルとアプリ層で適用）。
+
 ## Environment variables
 
 `.env.example` を `.env.local` にコピーして設定します（`.env.local` はコミットしない）。
@@ -415,7 +511,7 @@ Supabaseを使う場合：
 npm run lint && npm run typecheck && npm test && npm run build
 npm run test:e2e   # ビルド後に実行（Demoモードで起動して主要フローを検証）
 # RLSテスト（ローカルPostgreSQL）
-for t in rls_test rls_accounts_test rls_operations_test rls_publishing_test; do
+for t in rls_test rls_accounts_test rls_operations_test rls_publishing_test rls_ads_test; do
   cat supabase/tests/auth_stub.sql supabase/migrations/*.sql supabase/tests/$t.sql | psql -d <scratch_db>
 done
 ```
@@ -461,9 +557,12 @@ done
 - Insightsの時系列保存、成果分析（目的別KPI・Top/Worst・柱/SNS/店舗/目的別）、AI Performance Review、Marketing Memory、実績ベースのRecommendation → Planner反映、本部の要対応リストと店舗横断テーブル、イベントログ
 - Loading（Skeleton）/ Empty / Error state、Toast、フォームバリデーション、Disabled state
 
+- Meta広告 × AI改善ループ: 広告アカウント接続（OAuth / Mock）、日別Insights同期、Baseline・Funnel・Creative疲労の検知、AI分析→Creative仮説→Creative Brief / B・C案、人のApprove、A/Bテスト（最終確認→Metaへ反映）、Winner判定（データ不足判定あり）、Creative Memory、自社計測CV（手入力 / CSV）
+
 ## 未実装機能
 
-- 広告アカウント（Meta Marketing API）の連携・広告実績の同期、TikTok / X / YouTube / LINE / Facebookページ投稿
+- TikTok / X / YouTube / LINE / Facebookページ投稿、Google広告
+- 広告: Split Test（ad_studies）、Visual/Format テスト用の素材アップロード、Conversions APIへの自社CV送信、非同期Insightsレポート
 - 画像・動画生成
 - メンバー招待・権限管理UI（店舗スタッフに担当店舗だけを編集させる店舗単位の権限）、通知、プラン・請求
 - 本部キャンペーンの承認フロー（店舗の下書き → 本部承認 → 予約）、予約・応募などCV実績の連携
