@@ -110,5 +110,6 @@ test("demo account shows the NAORU demo organization", async ({ page }) => {
   await expect(page.getByText("DEMO").first()).toBeVisible();
   await expect(page.getByText("エンゲージメント率").first()).toBeVisible();
   await page.getByRole("link", { name: "⌁ 広告ダッシュボード", exact: true }).click();
-  await expect(page.getByText("秋の姿勢改善キャンペーン")).toBeVisible();
+  await expect(page.getByTestId("ads-kpis")).toBeVisible();
+  await expect(page.getByText("渋谷院 新規集客").first()).toBeVisible();
 });

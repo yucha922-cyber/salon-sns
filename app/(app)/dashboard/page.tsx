@@ -50,8 +50,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const posts = allPosts.filter(
     (p) => scope.kind === "all" || (scope.kind === "location" ? p.locationId === scope.id : p.accountId === scope.id),
   );
+  // Ad recommendations live on the ad dashboard (/ads) with their own CTA.
   const scopedRecommendations = recommendations.filter(
-    (r) => scope.kind === "all" || (scope.kind === "location" ? r.locationId === scope.id : r.socialAccountId === scope.id),
+    (r) => r.source !== "ads" && (scope.kind === "all" || (scope.kind === "location" ? r.locationId === scope.id : r.socialAccountId === scope.id)),
   );
   const accountLabels = Object.fromEntries(accounts.map((a) => [a.id, a.handle]));
   const locations = locationProfiles.map((l) => ({ id: l.locationId, name: l.locationName }));

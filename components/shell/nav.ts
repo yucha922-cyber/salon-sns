@@ -21,6 +21,7 @@ export const NAV_SECTIONS: { label?: string; items: NavItem[] }[] = [
     label: "広告",
     items: [
       { href: "/ads", label: "広告ダッシュボード", icon: "⌁" },
+      { href: "/ads/experiments", label: "A/Bテスト", icon: "⇄" },
       { href: "/analysis", label: "AI分析", icon: "◉" },
       { href: "/studio", label: "Creative Studio", icon: "✧" },
     ],
@@ -44,6 +45,10 @@ export const PAGE_TITLES: Record<string, string> = {
   "/performance": "成果分析",
   "/memory": "Marketing Memory",
   "/ads": "広告ダッシュボード",
+  "/ads/creatives": "Creative比較",
+  "/ads/experiments": "A/Bテスト",
+  "/ads/connect": "広告アカウント接続",
+  "/ads/conversions": "自社計測CV",
   "/analysis": "AI分析",
   "/studio": "Creative Studio",
   "/chat": "AIマーケター",

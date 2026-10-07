@@ -62,8 +62,11 @@ export function AppShell(props: ShellProps) {
   }, []);
 
   const current = props.organizations.find((o) => o.id === props.currentOrganizationId);
-  const section = "/" + (pathname.split("/")[1] ?? "");
-  const isActive = (href: string) => section === href;
+  // Longest matching nav entry wins (/ads/experiments over /ads).
+  const known = [...NAV_SECTIONS.flatMap((g) => g.items.map((i) => i.href)), ...Object.keys(PAGE_TITLES)];
+  const section = known.filter((h) => pathname === h || pathname.startsWith(`${h}/`)).sort((a, b) => b.length - a.length)[0] ?? "/" + (pathname.split("/")[1] ?? "");
+  const navSection = NAV_SECTIONS.flatMap((g) => g.items.map((i) => i.href)).filter((h) => pathname === h || pathname.startsWith(`${h}/`)).sort((a, b) => b.length - a.length)[0] ?? section;
+  const isActive = (href: string) => navSection === href;
 
   const switchOrg = (id: string) =>
     startTransition(async () => {

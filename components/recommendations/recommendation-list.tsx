@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import type { Recommendation, RecommendationStatus } from "@/lib/domain/types";
@@ -74,6 +75,7 @@ export function RecommendationList({
                 <span className={`sev ${r.severity}`}>重要度 {SEVERITY_LABELS[r.severity]}</span>
                 <span className="loc-pill" style={{ marginRight: 5 }}>{RECOMMENDATION_CATEGORY_LABELS[r.category]}</span>
                 {r.source === "performance" && <span className="loc-pill" style={{ marginRight: 5 }} title="Instagram / Threads の実績データ（Insights）から作成">実績データ</span>}
+                {r.source === "ads" && <span className="loc-pill" style={{ marginRight: 5 }} title="Meta広告のInsightsから作成">広告データ</span>}
                 {r.title}
               </h4>
               {!compact && (
@@ -91,6 +93,9 @@ export function RecommendationList({
             </div>
             {!readOnly && (
               <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                {r.source === "ads" && typeof r.payload?.hypothesisId === "string" && r.payload?.variable && r.payload.variable !== "landing_page" && r.status !== "rejected" && (
+                  <Link className="button small primary" href={`/studio?hypothesis=${r.payload.hypothesisId}`}>✧ Creative案を作る</Link>
+                )}
                 {r.status === "pending" && (
                   <>
                     <button className="button small primary" onClick={() => setStatus(r.id, "approved")} disabled={pending} aria-label={`${r.title}を承認`} title={r.socialAccountId ? "承認するとSNS Plannerに下書きとして追加されます" : undefined}>
