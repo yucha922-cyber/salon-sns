@@ -55,3 +55,18 @@
 5. Threads の uninstall / delete callback の payload 形式。Meta共通の `signed_request` を前提にしています。
 6. 2207xxx 系エラーコードの公式一覧。現在はコード範囲で分類しています。
 7. v26 で予定されている 2026-10-27 の変更が、Instagram の投稿・インサイトに影響するか。
+
+## Marketing API（広告）— 2026-10-07 確認
+
+- バージョン: v26.0 が最新。v24.0 は 2026-10-06 で失効（`META_GRAPH_API_VERSION` で一元管理）。
+- 認可: Facebook Login for Business（`config_id`）。短期トークン → `fb_exchange_token` で長期化、`debug_token` で scope / 期限を確認。広告アカウントは `GET /me/adaccounts?fields=account_id,name,currency,timezone_name,account_status,business`。
+- 権限: `ads_read`（Insights）, `ads_management`（承認済みテスト広告の作成・停止）, `business_management`。他社アカウントは Advanced Access + ビジネス認証。Access Tier（Limited/Full）は利用実績で昇格。
+- 予算は通貨の最小単位（JPYはoffset 1、USD等は100）。
+- Insights: `GET /act_<id>/insights?level=ad&time_increment=1&time_range=...`。clicks は `inline_link_clicks`、LPVは `actions[landing_page_view]`、動画は `actions[video_view]`（3秒）と `video_thruplay_watched_actions`。予約は `schedule_total` / `schedule_website` / `offsite_conversion.fb_pixel_schedule`、応募は `submit_application_*`。
+- 2026-01-12以降 7d_view / 28d_view は空データ。2025-06-10以降 `use_unified_attribution_setting` は無視され、広告セットのアトリビューション設定が使われる。直近28日は値が更新されるため再取得する。
+- Rate limit: エラーコード 80000/80004（ads insights / management）, 17 (subcode 2446079), 613 (1487742), 4, 190（トークン無効）, 200/10/294（権限）。`x-business-use-case-usage` を見て待機。
+- Creative: `object_story_spec.link_data` + `instagram_user_id`（`instagram_actor_id` は廃止）。Advantage+ creative の個別機能は `degrees_of_freedom_spec.creative_features_spec` で OPT_OUT（`standard_enhancements` は v22 で廃止）— 1変数テストを崩さないため。
+- 広告は `status=PAUSED` で作成可能。Split Test（`ad_studies` / SPLIT_TEST）は別広告セットが必要なためMVPでは不使用。
+- 2026-10-27 以降、特別広告カテゴリの広告セット作成で `advantage_audience` の明示が必要。
+- Offline Conversions API は 2025-05-14 に廃止 → Conversions API（`action_source=physical_store` 等）。
+- 健康・ウェルネス / 個人属性ポリシー:「○○に悩むあなたへ」等は不承認リスク（`lib/ads/policy.ts` で警告）。
